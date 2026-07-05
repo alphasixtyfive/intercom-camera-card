@@ -2,7 +2,7 @@
 
 Lovelace dashboard card for a doorbell or gate intercom camera with low-latency WebRTC video, optional browser microphone talkback, a main/sub stream switcher, and configurable action buttons for gates, lights, sounds, and TTS messages.
 
-![Intercom Camera Card preview](images/preview.svg)
+![Intercom Camera Card preview](images/preview.png)
 
 This card was built for intercom-style Home Assistant dashboards where the useful controls need to be available directly on top of the live camera view: answer/hang up, open a gate, turn on a light, play a warning sound, or send a canned voice message.
 
