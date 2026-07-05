@@ -1,5 +1,7 @@
 # Intercom Camera Card
 
+[![Open your Home Assistant instance and open this repository inside HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=alphasixtyfive&repository=intercom-camera-card&category=plugin)
+
 Lovelace dashboard card for a doorbell or gate intercom camera with low-latency WebRTC video, optional browser microphone talkback, a main/sub stream switcher, and configurable action buttons for gates, lights, sounds, and TTS messages.
 
 ![Intercom Camera Card preview](images/preview.jpg)
