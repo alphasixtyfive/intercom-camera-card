@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-label="Intercom Camera Card preview">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6f8fb0"/>
+      <stop offset="0.45" stop-color="#aeb8bd"/>
+      <stop offset="1" stop-color="#2b3032"/>
+    </linearGradient>
+    <linearGradient id="shade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#000" stop-opacity="0"/>
+      <stop offset="0.55" stop-color="#05111f" stop-opacity=".26"/>
+      <stop offset="1" stop-color="#05111f" stop-opacity=".78"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#000" flood-opacity=".34"/>
+    </filter>
+  </defs>
+  <rect width="1280" height="720" rx="22" fill="#050505"/>
+  <rect x="14" y="14" width="1252" height="692" rx="16" fill="url(#sky)"/>
+  <path d="M14 466 C160 438 295 452 426 430 C591 402 711 444 887 404 C1055 366 1160 388 1266 356 L1266 706 L14 706 Z" fill="#313b39"/>
+  <path d="M726 152 L1048 242 L1048 706 L726 706 Z" fill="#c9c0ad"/>
+  <path d="M778 254 L996 313 L996 706 L778 706 Z" fill="#34373c"/>
+  <path d="M826 322 L950 356 L950 706 L826 706 Z" fill="#191d22"/>
+  <rect x="870" y="424" width="34" height="112" rx="6" fill="#697079"/>
+  <circle cx="896" cy="480" r="7" fill="#e8c15c"/>
+  <path d="M106 338 L430 250 L430 706 L106 706 Z" fill="#b8aa94"/>
+  <rect x="158" y="398" width="178" height="186" rx="10" fill="#293138"/>
+  <rect x="180" y="426" width="134" height="122" rx="6" fill="#151b21"/>
+  <rect x="14" y="14" width="1252" height="692" rx="16" fill="url(#shade)"/>
+  <g filter="url(#shadow)">
+    <rect x="50" y="42" width="104" height="52" rx="16" fill="#111d2d" fill-opacity=".72" stroke="#fff" stroke-opacity=".18"/>
+    <text x="102" y="75" text-anchor="middle" fill="#f7fbff" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700">Main</text>
+  </g>
+  <g filter="url(#shadow)">
+    <circle cx="456" cy="612" r="46" fill="#1f6feb" stroke="#fff" stroke-opacity=".22"/>
+    <path d="M437 613 h38 M456 594 v38" stroke="#fff" stroke-width="10" stroke-linecap="round"/>
+    <circle cx="552" cy="612" r="46" fill="#f59e0b" stroke="#fff" stroke-opacity=".22"/>
+    <path d="M537 616 l12 12 l27-34" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="640" cy="612" r="54" fill="#159447" stroke="#fff" stroke-opacity=".28"/>
+    <path d="M615 590 c19 47 43 71 90 90 c8 3 16 0 20-8 l7-15 c2-5 1-10-3-13 l-24-17 c-4-3-10-3-14 0 l-10 8 c-15-8-27-20-35-35 l8-10 c3-4 3-10 0-14 l-17-24 c-3-4-8-5-13-3 l-15 7 c-8 4-11 12-8 20 z" transform="translate(-10 -2) scale(.78)" fill="#fff"/>
+    <circle cx="728" cy="612" r="46" fill="#b4552f" stroke="#fff" stroke-opacity=".22"/>
+    <path d="M706 624 h44 l-22-42 z" fill="#fff"/>
+    <circle cx="824" cy="612" r="46" fill="#1f2937" fill-opacity=".86" stroke="#fff" stroke-opacity=".22"/>
+    <path d="M804 628 h40 M812 604 h24 M820 580 h8" stroke="#ffcf6b" stroke-width="10" stroke-linecap="round"/>
+  </g>
+  <text x="640" y="674" text-anchor="middle" fill="#dfe8f2" font-family="Arial, Helvetica, sans-serif" font-size="20">WebRTC intercom controls over live camera video</text>
+</svg>
