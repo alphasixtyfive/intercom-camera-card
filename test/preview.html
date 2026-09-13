@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Intercom card test bench</title>
+    <style>
+        body {
+            margin: 24px;
+            background: #eef1f4;
+            color: #20252c;
+            font: 16px system-ui;
+        }
+        h1 {
+            font-size: 22px;
+        }
+        main {
+            max-width: 900px;
+            margin: auto;
+        }
+        #mount {
+            height: 504px;
+        }
+        button {
+            padding: 10px;
+            margin: 8px 4px 8px 0;
+        }
+        output {
+            display: block;
+            min-height: 24px;
+        }
+    </style>
+    <main>
+        <h1>Intercom card test bench</h1>
+        <p>Simulated entities and video. No connection to a camera, gate, or speaker.</p>
+        <button id="unavailable">Toggle unavailable</button>
+        <button id="presentation">Rename primary stream</button>
+        <button id="panel">Toggle panel layout</button>
+        <button id="mount-toggle">Remove card</button>
+        <output id="events" role="status">No action sent</output>
+        <div id="mount"></div>
+    </main>
+    <script type="module">
+        import '../intercom-camera-card.js';
+        customElements.define('ha-card', class extends HTMLElement {});
+        customElements.define(
+            'ha-icon',
+            class extends HTMLElement {
+                static observedAttributes = ['icon'];
+                attributeChangedCallback() {
+                    const icon = this.getAttribute('icon');
+                    this.textContent = icon.includes('phone')
+                        ? '☎'
+                        : icon.includes('lightbulb')
+                          ? '☼'
+                          : icon.includes('gate')
+                            ? '▥'
+                            : icon.includes('bullhorn')
+                              ? '♪'
+                              : '☏';
+                    this.style.fontSize = '30px';
+                }
+            },
+        );
+        const settings = {
+            stream: 'front_door',
+            alternate_stream: 'front_door_sub',
+            primary_label: 'HD',
+            alternate_label: 'SD',
+            player: 'media_player.door',
+            buttons: [
+                { entity: 'cover.gate', title: 'Gate' },
+                { entity: 'light.porch', title: 'Porch' },
+                { sound: 'chime.wav', title: 'Chime', position: 'right' },
+                { tts: 'Please leave the parcel by the door.', title: 'Parcel', position: 'right' },
+            ],
+        };
+        const states = {
+            'cover.gate': { state: 'closed' },
+            'light.porch': { state: 'off' },
+            'media_player.door': { state: 'idle' },
+        };
+        const hass = {
+            states: { ...states },
+            callWS: () => new Promise(() => {}),
+            hassUrl: (path) => location.origin + path,
+        };
+        const card = document.createElement('intercom-camera-card');
+        card.onconnect = () => false;
+        card.setConfig(settings);
+        card.hass = hass;
+        document.querySelector('#mount').append(card);
+        const canvas = document.createElement('canvas');
+        canvas.width = 1280;
+        canvas.height = 720;
+        const context = canvas.getContext('2d');
+        const gradient = context.createLinearGradient(0, 0, 1280, 720);
+        gradient.addColorStop(0, '#59727b');
+        gradient.addColorStop(1, '#293b42');
+        context.fillStyle = gradient;
+        context.fillRect(0, 0, 1280, 720);
+        context.fillStyle = '#aebdbd';
+        context.fillRect(400, 120, 350, 600);
+        context.fillStyle = '#425951';
+        context.fillRect(450, 160, 250, 560);
+        context.fillStyle = '#d2b570';
+        context.fillRect(650, 430, 20, 10);
+        context.fillStyle = '#fff';
+        context.font = '24px sans-serif';
+        context.fillText('Simulated front door', 32, 52);
+        card.video.poster = canvas.toDataURL();
+        card.showStatus('Preview — simulated video');
+        card.addEventListener('hass-action', (event) => {
+            document.querySelector('#events').textContent = JSON.stringify(
+                event.detail.config.tap_action,
+            );
+            if (event.detail.config.entity === 'light.porch') {
+                states['light.porch'] = {
+                    state: states['light.porch'].state === 'on' ? 'off' : 'on',
+                };
+                card.hass = { ...hass, states: { ...states } };
+            }
+        });
+        document.querySelector('#unavailable').onclick = () => {
+            states['cover.gate'] = {
+                state: states['cover.gate'].state === 'unavailable' ? 'closed' : 'unavailable',
+            };
+            card.hass = { ...hass, states: { ...states } };
+        };
+        document.querySelector('#presentation').onclick = () =>
+            card.setConfig({ ...settings, primary_label: 'Main' });
+        document.querySelector('#panel').onclick = () => {
+            card.layout = card.hasAttribute('panel') ? undefined : 'panel';
+        };
+        document.querySelector('#mount-toggle').onclick = (event) => {
+            if (card.isConnected) {
+                card.remove();
+                event.target.textContent = 'Restore card';
+            } else {
+                document.querySelector('#mount').append(card);
+                event.target.textContent = 'Remove card';
+            }
+        };
+    </script>
+</html>

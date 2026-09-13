@@ -17,8 +17,8 @@ jobs:
         with:
           category: plugin
 
-  syntax:
-    name: JavaScript syntax
+  checks:
+    name: Lint, tests, and build
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -29,5 +29,14 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Check JavaScript syntax
-        run: node --check intercom-camera-card.js
+      - name: Install development dependencies
+        run: npm ci
+
+      - name: Check formatting
+        run: npm run format:check
+
+      - name: Check source and build
+        run: npm run check
+
+      - name: Check committed bundle is current
+        run: git diff --exit-code -- intercom-camera-card.js
