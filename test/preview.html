@@ -28,6 +28,21 @@
             display: block;
             min-height: 24px;
         }
+        body.screenshot {
+            margin: 0;
+        }
+        body.screenshot main {
+            max-width: none;
+        }
+        body.screenshot h1,
+        body.screenshot p,
+        body.screenshot main > button,
+        body.screenshot output {
+            display: none;
+        }
+        body.screenshot #mount {
+            height: 100dvh;
+        }
     </style>
     <main>
         <h1>Intercom card test bench</h1>
@@ -41,6 +56,9 @@
     </main>
     <script type="module">
         import '../intercom-camera-card.js';
+        if (new URLSearchParams(location.search).has('screenshot')) {
+            document.body.classList.add('screenshot');
+        }
         customElements.define('ha-card', class extends HTMLElement {});
         customElements.define(
             'ha-icon',
@@ -108,7 +126,7 @@
         context.font = '24px sans-serif';
         context.fillText('Simulated front door', 32, 52);
         card.video.poster = canvas.toDataURL();
-        card.showStatus('Preview — simulated video');
+        card.showStatus('Connecting video', 0, 'center');
         card.addEventListener('hass-action', (event) => {
             document.querySelector('#events').textContent = JSON.stringify(
                 event.detail.config.tap_action,

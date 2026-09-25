@@ -207,6 +207,7 @@ test('signed connection requests coalesce and stale replies cannot connect', asy
             });
         },
     };
+    assert.equal(requests, 1, 'path signing starts before the card mounts');
     document.body.append(element);
     element.onconnect();
     element.onconnect();
@@ -216,6 +217,46 @@ test('signed connection requests coalesce and stale replies cannot connect', asy
     await Promise.resolve();
     assert.equal(element.ws, null);
     assert.equal(element.signing, false);
+    assert.equal(element.signedPath, '');
+});
+
+test('rapid stream changes reuse a valid signed path', async () => {
+    const element = document.createElement('intercom-camera-card');
+    element.setConfig(config);
+    let requests = 0;
+    element.hass = {
+        ...hass,
+        callWS: async () => {
+            requests++;
+            return { path: `/api/webrtc/ws?authSig=${requests}` };
+        },
+    };
+
+    const first = await element.getSignedPath();
+    assert.equal(await element.getSignedPath(), first);
+    assert.equal(requests, 1);
+
+    element.signedPathExpiresAt = Date.now() - 1;
+    assert.notEqual(await element.getSignedPath(), first);
+    assert.equal(requests, 2);
+});
+
+test('loading stays centered until the visible video plays', () => {
+    const element = card();
+    const incoming = document.createElement('video');
+    incoming.srcObject = new window.MediaStream();
+    const timeout = element.connectionTimeout;
+    assert.ok(timeout);
+    assert.equal(element.$('.status').classList.contains('centered'), true);
+
+    element.onpcvideo(incoming);
+    assert.equal(element.connectionTimeout, timeout);
+    assert.equal(element.$('.status').textContent, 'Connecting video');
+
+    element.video.dispatchEvent(new window.Event('playing'));
+    assert.equal(element.connectionTimeout, 0);
+    assert.equal(element.$('.status').textContent, '');
+    assert.equal(element.$('.status').classList.contains('centered'), false);
 });
 
 test('signaling URL preserves HA signing and encodes sources safely', () => {

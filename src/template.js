@@ -5,18 +5,18 @@ export const CARD_TEMPLATE = `
         --intercom-height: calc(100dvh - 96px);
         --intercom-height-mobile: calc(100dvh - 72px);
         --intercom-fit: cover;
-        --intercom-shade-background: linear-gradient(to top, rgba(5, 11, 20, 0.68), rgba(5, 11, 20, 0.20) 56%, rgba(0, 0, 0, 0));
+        --intercom-shade-background: linear-gradient(to top, rgba(0, 0, 0, 0.68), rgba(0, 0, 0, 0.18) 56%, transparent);
         --intercom-controls-gap: 18px;
         --intercom-controls-width: 420px;
         --intercom-button-size: 68px;
         --intercom-button-size-mobile: 56px;
         --intercom-icon-size: 30px;
-        --intercom-button-background: rgba(9, 18, 32, 0.72);
-        --intercom-button-hover-background: rgba(18, 35, 58, 0.84);
+        --intercom-button-background: rgba(25, 25, 25, 0.72);
+        --intercom-button-hover-background: rgba(45, 45, 45, 0.84);
         --intercom-button-border: 1px solid rgba(255, 255, 255, 0.22);
         --intercom-button-shadow: 0 10px 28px rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.14);
         --intercom-icon-shadow: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.42));
-        --intercom-status-background: rgba(5, 11, 20, 0.72);
+        --intercom-status-background: rgba(25, 25, 25, 0.78);
         height: 100%;
     }
     ha-card {
@@ -25,9 +25,6 @@ export const CARD_TEMPLATE = `
         height: 100%;
         min-height: 328px;
         overflow: hidden;
-        border-radius: var(--ha-card-border-radius, 12px);
-        background: #050505;
-        box-shadow: none;
     }
     :host([panel]) ha-card {
         height: var(--intercom-height);
@@ -129,7 +126,7 @@ export const CARD_TEMPLATE = `
         transform: scale(0.94);
     }
     button:focus-visible {
-        outline: 2px solid rgba(116, 184, 255, 0.86);
+        outline: 2px solid var(--primary-color, #03a9f4);
         outline-offset: 3px;
     }
     button[hidden] {
@@ -155,17 +152,17 @@ export const CARD_TEMPLATE = `
         aspect-ratio: auto;
         padding: 0 13px;
         color: rgba(255, 255, 255, 0.94);
-        background: rgba(5, 11, 20, 0.56);
+        background: var(--intercom-button-background);
         border: 1px solid rgba(255, 255, 255, 0.22);
         box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
-        font: 700 12px/1 var(--paper-font-body1_-_font-family, sans-serif);
+        font: var(--ha-font-weight-medium, 500) var(--ha-font-size-s, 12px)/1 var(--ha-font-family-body, sans-serif);
         letter-spacing: 0;
         text-transform: uppercase;
         backdrop-filter: blur(10px);
         -webkit-backdrop-filter: blur(10px);
     }
     button.stream-toggle:hover {
-        background: rgba(18, 35, 58, 0.72);
+        background: var(--intercom-button-hover-background);
     }
     button.stream-toggle[disabled] {
         cursor: not-allowed;
@@ -225,7 +222,7 @@ export const CARD_TEMPLATE = `
         backdrop-filter: blur(10px);
         -webkit-backdrop-filter: blur(10px);
         box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
-        font: 600 13px/1.25 var(--paper-font-body1_-_font-family, sans-serif);
+        font: var(--ha-font-weight-medium, 500) var(--ha-font-size-m, 14px)/1.3 var(--ha-font-family-body, sans-serif);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: normal;
@@ -237,6 +234,14 @@ export const CARD_TEMPLATE = `
     }
     .status.visible {
         opacity: 1;
+    }
+    .status.centered {
+        top: 50%;
+        left: 50%;
+        max-width: min(calc(100% - 32px), 420px);
+        padding: 12px 18px;
+        font-size: var(--ha-font-size-l, 16px);
+        transform: translate(-50%, -50%);
     }
     @media (max-width: 680px) {
         :host([panel]) ha-card {

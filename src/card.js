@@ -41,6 +41,9 @@ export class IntercomCameraCard extends IntercomStream {
         const previous = this._hass;
         this._hass = hass;
         if (this.isConnected) this.buttons.updateStatefulButtons(previous);
+        if (!previous && this.config && !this.isConnected) {
+            this.getSignedPath().catch(() => {});
+        }
         if (!previous) this.onconnect();
     }
 
@@ -131,8 +134,7 @@ export class IntercomCameraCard extends IntercomStream {
         });
 
         this.video.addEventListener('playing', () => {
-            this.clearPoster();
-            this.setTalkBusy(false);
+            this.onVideoPlaying();
         });
         this.video.addEventListener('loadedmetadata', () => this.pan.updatePanAvailability());
         this.video.addEventListener('loadeddata', () => this.pan.updatePanAvailability());
@@ -246,18 +248,19 @@ export class IntercomCameraCard extends IntercomStream {
             button.setAttribute('aria-label', button.title);
         }
         if (status) {
-            this.showStatus(status);
+            this.showStatus(status, 0, busy ? 'center' : 'corner');
         } else if (!busy && !this.talking && Date.now() >= this.statusHoldUntil) {
             this.showStatus('', 0);
         }
     }
 
-    showStatus(text, timeout = 0) {
+    showStatus(text, timeout = 0, position = 'corner') {
         if (!this.shadowRoot) return;
 
         const status = this.$('.status');
         status.textContent = text || '';
         status.classList.toggle('visible', Boolean(text));
+        status.classList.toggle('centered', Boolean(text) && position === 'center');
 
         if (this.statusTimeout) {
             clearTimeout(this.statusTimeout);

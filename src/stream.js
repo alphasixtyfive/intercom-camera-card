@@ -18,6 +18,9 @@ export class IntercomStream extends VideoRTC {
         this.connectionGeneration = 0;
         this.connectionTimeout = 0;
         this.signing = false;
+        this.signedPath = '';
+        this.signedPathExpiresAt = 0;
+        this.signedPathPromise = null;
         this.talking = false;
         this.streamVariant = 'primary';
         this.localMicrophoneTracks = [];
@@ -25,6 +28,8 @@ export class IntercomStream extends VideoRTC {
         this.posterGeneration = 0;
         this.posterURL = null;
         this.pendingVideo = null;
+        this.playbackGeneration = -1;
+        this.playbackMicrophoneRequested = false;
         this.pendingConnectStatus = undefined;
         this.elementInView = true;
         this.visibilityHandlersInstalled = false;
@@ -174,18 +179,14 @@ export class IntercomStream extends VideoRTC {
             this.pendingConnectStatus ??
             (this.talking ? this.talkButton.starting_status : 'Connecting video');
         this.pendingConnectStatus = undefined;
-        if (status) this.showStatus(status);
+        if (status) this.showStatus(status, 0, 'center');
 
-        this.hass
-            .callWS({
-                type: 'auth/sign_path',
-                path: '/api/webrtc/ws',
-            })
-            .then((data) => {
+        this.getSignedPath()
+            .then((path) => {
                 if (!this.canStartConnection(generation)) return;
                 this.signing = false;
 
-                this.wsURL = this.buildWebSocketUrl(data.path);
+                this.wsURL = this.buildWebSocketUrl(path);
                 if (!this.wsURL) {
                     this.showStatus('Camera source unavailable');
                     this.setTalkBusy(false);
@@ -204,6 +205,30 @@ export class IntercomStream extends VideoRTC {
             });
 
         return true;
+    }
+
+    getSignedPath() {
+        if (this.signedPath && Date.now() < this.signedPathExpiresAt) {
+            return Promise.resolve(this.signedPath);
+        }
+        if (this.signedPathPromise) return this.signedPathPromise;
+
+        const expiresAt = Date.now() + 20_000;
+        const request = this.hass
+            .callWS({ type: 'auth/sign_path', path: '/api/webrtc/ws' })
+            .then(({ path }) => {
+                if (this.signedPathPromise !== request) return path;
+                // Home Assistant signs paths for 30 seconds by default. Reuse only
+                // a short portion for rapid stream or talk transitions.
+                this.signedPath = path;
+                this.signedPathExpiresAt = expiresAt;
+                return path;
+            })
+            .finally(() => {
+                if (this.signedPathPromise === request) this.signedPathPromise = null;
+            });
+        this.signedPathPromise = request;
+        return request;
     }
 
     canStartConnection(generation) {
@@ -255,7 +280,7 @@ export class IntercomStream extends VideoRTC {
         socket.addEventListener('close', () => {
             if (!current() || this.pcState === WebSocket.OPEN) return;
             this.ondisconnect();
-            this.showStatus('Reconnecting video');
+            this.showStatus('Reconnecting video', 0, 'center');
             this.scheduleReconnect();
         });
     }
@@ -294,18 +319,27 @@ export class IntercomStream extends VideoRTC {
     }
 
     onpcvideo(video2, microphoneRequested = false) {
-        clearTimeout(this.connectionTimeout);
-        this.connectionTimeout = 0;
         super.onpcvideo(video2);
-        if (this.pcState !== WebSocket.CLOSED && this.talking && microphoneRequested) {
-            if (this.hasLiveMicrophoneTrack()) {
-                this.showStatus(this.talkButton.active_status);
-            } else {
+        if (this.pcState !== WebSocket.OPEN) return;
+        this.playbackGeneration = this.connectionGeneration;
+        this.playbackMicrophoneRequested = microphoneRequested;
+        if (this.talking && microphoneRequested) {
+            if (!this.hasLiveMicrophoneTrack()) {
                 this.setTalking(false);
                 this.showStatus('Microphone unavailable', 3200);
             }
         }
-        this.setTalkBusy(false);
+    }
+
+    onVideoPlaying() {
+        if (this.playbackGeneration !== this.connectionGeneration || !this.video.srcObject) return;
+        clearTimeout(this.connectionTimeout);
+        this.connectionTimeout = 0;
+        this.clearPoster();
+        if (this.talking && this.playbackMicrophoneRequested && this.hasLiveMicrophoneTrack()) {
+            this.showStatus(this.talkButton.active_status);
+        }
+        if (!this.talking || this.playbackMicrophoneRequested) this.setTalkBusy(false);
     }
 
     async createOffer(pc) {
@@ -368,6 +402,9 @@ export class IntercomStream extends VideoRTC {
     ondisconnect() {
         this.connectionGeneration++;
         this.signing = false;
+        this.signedPathPromise = null;
+        this.playbackGeneration = -1;
+        this.playbackMicrophoneRequested = false;
         clearTimeout(this.connectionTimeout);
         this.connectionTimeout = 0;
         clearTimeout(this.statusTimeout);
@@ -537,7 +574,7 @@ export class IntercomStream extends VideoRTC {
         if (talkBusy) {
             this.setTalkBusy(true, status);
         } else {
-            this.showStatus(status);
+            this.showStatus(status, 0, 'center');
         }
         this.clearReconnectTimers();
         this.pendingConnectStatus = status;
@@ -641,7 +678,7 @@ export class IntercomStream extends VideoRTC {
                 preview.srcObject = new MediaStream(tracks);
             } else if (['failed', 'disconnected'].includes(pc.connectionState)) {
                 this.ondisconnect();
-                this.showStatus('Reconnecting video');
+                this.showStatus('Reconnecting video', 0, 'center');
                 this.scheduleReconnect(1000);
             }
         });
