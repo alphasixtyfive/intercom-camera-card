@@ -245,6 +245,7 @@ test('loading stays centered until the visible video plays', () => {
     const element = card();
     const incoming = document.createElement('video');
     incoming.srcObject = new window.MediaStream();
+    element.pc = { getSenders: () => [], getReceivers: () => [], close() {} };
     const timeout = element.connectionTimeout;
     assert.ok(timeout);
     assert.equal(element.$('.status').classList.contains('centered'), true);
