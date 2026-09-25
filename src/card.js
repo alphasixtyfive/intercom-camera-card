@@ -96,6 +96,8 @@ export class IntercomCameraCard extends IntercomStream {
     oninit() {
         this.video = document.createElement('video');
         this.video.controls = false;
+        this.video.tabIndex = 0;
+        this.video.setAttribute('aria-label', 'Camera video. Press Enter to enable sound');
         this.video.playsInline = true;
         this.video.preload = 'auto';
         this.video.volume = 1;
@@ -115,6 +117,11 @@ export class IntercomCameraCard extends IntercomStream {
 
     bindControls() {
         this.$('.stage').addEventListener('pointerup', () => this.enableAudio(), { passive: true });
+        this.$('.stage').addEventListener('keydown', (event) => {
+            if (event.target !== this.video || !['Enter', ' '].includes(event.key)) return;
+            event.preventDefault();
+            this.enableAudio();
+        });
         this.$('.talk').addEventListener('click', () => this.toggleTalk());
         this.$('.stream-toggle').addEventListener('click', () => this.toggleStreamVariant());
     }
@@ -123,6 +130,7 @@ export class IntercomCameraCard extends IntercomStream {
         if (!this.video) return;
         this.video.muted = false;
         this.video.volume = 1;
+        this.video.setAttribute('aria-label', 'Camera video');
         this.play();
     }
 
@@ -168,7 +176,6 @@ export class IntercomCameraCard extends IntercomStream {
         button.title = title;
         button.disabled = this.talking;
         button.setAttribute('aria-label', title);
-        button.setAttribute('aria-pressed', this.useAlternateStream() ? 'true' : 'false');
     }
 
     toggleStreamVariant() {
@@ -207,7 +214,6 @@ export class IntercomCameraCard extends IntercomStream {
         button.disabled = sourceUnavailable || (button.classList.contains('busy') && !this.talking);
         button.title = buttonTitle;
         button.setAttribute('aria-label', buttonTitle);
-        button.setAttribute('aria-pressed', this.talking ? 'true' : 'false');
         icon.setAttribute('icon', iconName);
         button.style.setProperty('--button-color', color);
         button.style.setProperty('--talk-active-color', this.talkButton.active_color);

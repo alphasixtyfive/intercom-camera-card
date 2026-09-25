@@ -53,6 +53,15 @@ export const CARD_TEMPLATE = `
         object-fit: var(--intercom-fit);
         object-position: var(--intercom-video-pan-x, 50%) center;
         background: #050505;
+        transition: filter 180ms ease, transform 180ms ease;
+    }
+    video.loading {
+        filter: blur(7px) brightness(0.62);
+        transform: scale(1.025);
+    }
+    video:focus-visible {
+        outline: 2px solid var(--primary-color, #03a9f4);
+        outline-offset: -4px;
     }
     .stage.pannable video {
         cursor: grab;
@@ -119,8 +128,13 @@ export const CARD_TEMPLATE = `
             opacity 150ms ease,
             transform 150ms ease;
     }
-    button:hover {
-        background: var(--button-hover-background, var(--intercom-button-hover-background));
+    @media (hover: hover) {
+        button:hover {
+            background: var(--button-hover-background, var(--intercom-button-hover-background));
+        }
+        button.stream-toggle:hover {
+            background: var(--intercom-button-hover-background);
+        }
     }
     button:active {
         transform: scale(0.94);
@@ -128,6 +142,7 @@ export const CARD_TEMPLATE = `
     button:focus-visible {
         outline: 2px solid var(--primary-color, #03a9f4);
         outline-offset: 3px;
+        box-shadow: 0 0 0 5px rgba(0, 0, 0, 0.75), var(--button-shadow, var(--intercom-button-shadow));
     }
     button[hidden] {
         display: none;
@@ -160,9 +175,6 @@ export const CARD_TEMPLATE = `
         text-transform: uppercase;
         backdrop-filter: blur(10px);
         -webkit-backdrop-filter: blur(10px);
-    }
-    button.stream-toggle:hover {
-        background: var(--intercom-button-hover-background);
     }
     button.stream-toggle[disabled] {
         cursor: not-allowed;
@@ -240,7 +252,7 @@ export const CARD_TEMPLATE = `
         left: 50%;
         max-width: min(calc(100% - 32px), 420px);
         padding: 12px 18px;
-        font-size: var(--ha-font-size-l, 16px);
+        font-size: var(--ha-font-size-xl, 18px);
         transform: translate(-50%, -50%);
     }
     @media (max-width: 680px) {
@@ -251,6 +263,9 @@ export const CARD_TEMPLATE = `
         }
     }
     @container (max-width: 680px) {
+        .status.centered {
+            font-size: var(--ha-font-size-l, 16px);
+        }
         .controls {
             left: max(8px, env(safe-area-inset-left));
             right: max(8px, env(safe-area-inset-right));
@@ -292,7 +307,7 @@ export const CARD_TEMPLATE = `
         }
     }
     @media (prefers-reduced-motion: reduce) {
-        button, .status { transition: none; }
+        button, .status, video { transition: none; }
     }
 </style>
 <ha-card>

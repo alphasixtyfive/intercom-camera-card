@@ -176,6 +176,23 @@ test('native action events preserve confirmation and targets', () => {
     assert.equal(element.buttons.cooldowns.size, 0);
 });
 
+test('keyboard activation enables audio and buttons keep clear action labels', () => {
+    const element = card();
+    let audioEnables = 0;
+    element.enableAudio = () => audioEnables++;
+    const talk = element.$('.talk');
+    element.video.dispatchEvent(
+        new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
+    );
+    assert.equal(audioEnables, 1);
+    talk.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    assert.equal(audioEnables, 1);
+    assert.equal(element.video.tabIndex, 0);
+    assert.equal(talk.getAttribute('aria-label'), 'Talk');
+    assert.equal(talk.hasAttribute('aria-pressed'), false);
+    assert.equal(element.$('.stream-toggle').hasAttribute('aria-pressed'), false);
+});
+
 test('talk disables audio and unavailable entities stay disabled', () => {
     const element = card();
     element.setTalking(true);
@@ -274,6 +291,24 @@ test('signaling URL preserves HA signing and encodes sources safely', () => {
     url = new URL(element.buildWebSocketUrl('/api/webrtc/ws?authSig=abc'));
     assert.equal(url.searchParams.get('url'), 'door sub');
     assert.equal(url.searchParams.has('entity'), false);
+});
+
+test('a signing error ends Talk before retrying', async (t) => {
+    t.mock.method(console, 'warn', () => {});
+    let reject;
+    const element = document.createElement('intercom-camera-card');
+    element.setConfig(config);
+    element.hass = {
+        ...hass,
+        callWS: () => new Promise((_, fail) => (reject = fail)),
+    };
+    document.body.append(element);
+    element.setTalking(true);
+    reject(new Error('Signing unavailable'));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(element.talking, false);
+    assert.equal(element.$('.status').textContent, 'Connection error');
+    assert.ok(element.reconnectTID);
 });
 
 test('visibility stops streaming and invalidates pending work', () => {
@@ -451,6 +486,87 @@ test('poster encoding is bounded and discarded after navigation', (t) => {
     element.remove();
     encoded(new Blob(['poster']));
     assert.equal(allocations, 0);
+});
+
+test('a recent frame appears blurred while reopening the same camera', (t) => {
+    const element = card({ stream: 'cached-door-test' });
+    Object.defineProperty(element.video, 'videoWidth', { value: 1920 });
+    Object.defineProperty(element.video, 'videoHeight', { value: 1080 });
+    element.hasPlayedFrame = true;
+    let encoded;
+    const canvas = {
+        getContext: () => ({ drawImage() {} }),
+        toBlob(callback) {
+            encoded = callback;
+        },
+    };
+    const create = document.createElement.bind(document);
+    t.mock.method(document, 'createElement', (tag) => (tag === 'canvas' ? canvas : create(tag)));
+    t.mock.method(URL, 'createObjectURL', () => 'blob:cached-door-test');
+    t.mock.method(URL, 'revokeObjectURL', () => {});
+    element.remove();
+    assert.equal(canvas.width, 640);
+    assert.equal(canvas.height, 360);
+    encoded(new Blob(['frame']));
+
+    const reopened = card({ stream: 'cached-door-test' });
+    assert.equal(reopened.video.poster, 'blob:cached-door-test');
+    assert.equal(reopened.video.classList.contains('loading'), true);
+});
+
+test('a brief peer disconnect keeps the current connection', (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const Original = globalThis.RTCPeerConnection;
+    class Peer extends EventTarget {
+        connectionState = 'connected';
+        addTransceiver() {}
+        createOffer() {
+            return new Promise(() => {});
+        }
+        getSenders() {
+            return [];
+        }
+        getReceivers() {
+            return [];
+        }
+        close() {}
+    }
+    globalThis.RTCPeerConnection = Peer;
+    try {
+        const element = card();
+        element.onmessage = {};
+        element.onwebrtc();
+        const peer = element.pc;
+        element.pcState = WebSocket.OPEN;
+        peer.connectionState = 'disconnected';
+        peer.dispatchEvent(new Event('connectionstatechange'));
+        assert.ok(element.peerDisconnectTimeout);
+        peer.connectionState = 'connected';
+        peer.dispatchEvent(new Event('connectionstatechange'));
+        t.mock.timers.tick(1600);
+        assert.equal(element.pc, peer);
+        assert.equal(element.peerDisconnectTimeout, 0);
+    } finally {
+        globalThis.RTCPeerConnection = Original;
+    }
+});
+
+test('automatic retries start quickly and back off', (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const element = card();
+    element.disconnectImmediately();
+    let attempts = 0;
+    element.onconnect = () => attempts++;
+    element.scheduleReconnect();
+    t.mock.timers.tick(999);
+    assert.equal(attempts, 0);
+    t.mock.timers.tick(1);
+    assert.equal(attempts, 1);
+    element.scheduleReconnect();
+    t.mock.timers.tick(1999);
+    assert.equal(attempts, 1);
+    t.mock.timers.tick(1);
+    assert.equal(attempts, 2);
 });
 
 test('disabling talk through configuration releases the active microphone', () => {
@@ -683,19 +799,12 @@ test('connection timeout stops talk and releases tracks before retrying', (t) =>
     element.remove();
 });
 
-test('receive-only video finishing cannot cancel a pending talk request', async () => {
+test('Talk starts while media_player.media_stop is still pending', () => {
     const element = card();
-    let finishStoppingAudio;
-    element.stopAudioPlayers = () =>
-        new Promise((resolve) => {
-            finishStoppingAudio = resolve;
-        });
-    const starting = element.toggleTalk();
+    element.stopAudioPlayers = () => new Promise(() => {});
+    const generation = element.connectionGeneration;
+    element.toggleTalk();
     assert.equal(element.talking, true);
-    element.pcState = WebSocket.OPEN;
-    element.onpcvideo(document.createElement('video'), false);
-    assert.equal(element.talking, true);
-    finishStoppingAudio();
-    await starting;
+    assert.ok(element.connectionGeneration > generation);
     assert.equal(element.media, 'video,audio,microphone');
 });
