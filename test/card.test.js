@@ -503,7 +503,8 @@ test('a recent frame appears blurred while reopening the same camera', (t) => {
     const create = document.createElement.bind(document);
     t.mock.method(document, 'createElement', (tag) => (tag === 'canvas' ? canvas : create(tag)));
     t.mock.method(URL, 'createObjectURL', () => 'blob:cached-door-test');
-    t.mock.method(URL, 'revokeObjectURL', () => {});
+    let revoked = 0;
+    t.mock.method(URL, 'revokeObjectURL', () => revoked++);
     element.remove();
     assert.equal(canvas.width, 640);
     assert.equal(canvas.height, 360);
@@ -512,6 +513,8 @@ test('a recent frame appears blurred while reopening the same camera', (t) => {
     const reopened = card({ stream: 'cached-door-test' });
     assert.equal(reopened.video.poster, 'blob:cached-door-test');
     assert.equal(reopened.video.classList.contains('loading'), true);
+    reopened.disconnectImmediately();
+    assert.equal(revoked, 1);
 });
 
 test('a brief peer disconnect keeps the current connection', (t) => {

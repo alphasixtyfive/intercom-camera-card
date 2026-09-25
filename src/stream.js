@@ -33,7 +33,6 @@ export class IntercomStream extends VideoRTC {
         this.keepFrameOnDisconnect = false;
         this.posterGeneration = 0;
         this.posterURL = null;
-        this.cachedPosterURL = null;
         this.posterCapturePending = false;
         this.hasPlayedFrame = false;
         this.pendingVideo = null;
@@ -275,9 +274,8 @@ export class IntercomStream extends VideoRTC {
             cachedFrames.delete(this.frameCacheKey());
             return;
         }
-        if (this.cachedPosterURL) URL.revokeObjectURL(this.cachedPosterURL);
-        this.cachedPosterURL = URL.createObjectURL(cached.blob);
-        this.video.poster = this.cachedPosterURL;
+        this.posterURL = URL.createObjectURL(cached.blob);
+        this.video.poster = this.posterURL;
     }
 
     cacheLastFrame() {
@@ -707,9 +705,7 @@ export class IntercomStream extends VideoRTC {
         this.posterGeneration++;
         this.posterCapturePending = false;
         if (this.posterURL) URL.revokeObjectURL(this.posterURL);
-        if (this.cachedPosterURL) URL.revokeObjectURL(this.cachedPosterURL);
         this.posterURL = null;
-        this.cachedPosterURL = null;
         this.video?.removeAttribute('poster');
     }
 
