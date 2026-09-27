@@ -16,7 +16,9 @@ export const CARD_TEMPLATE = `
     }
     :host([panel]) ha-card {
         height: var(--intercom-height);
-        border-radius: var(--ha-border-radius-lg, 12px);
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
     }
     .stage {
         position: relative;
