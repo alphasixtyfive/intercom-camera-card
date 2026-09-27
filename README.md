@@ -44,6 +44,7 @@ Use a go2rtc stream name:
 ```yaml
 type: custom:intercom-camera-card
 stream: front_gate
+poster_entity: camera.front_gate
 ```
 
 Or use a Home Assistant camera entity:
@@ -53,11 +54,14 @@ type: custom:intercom-camera-card
 entity: camera.front_gate
 ```
 
+`poster_entity` is optional when a go2rtc stream is used. It shows Home Assistant's still image while the live video connects. If no still image is available, the card keeps its dark loading background. A recently played frame takes priority during reconnect.
+
 Here is the front gate layout shown above:
 
 ```yaml
 type: custom:intercom-camera-card
 stream: front_gate
+poster_entity: camera.front_gate
 alternate_stream: front_gate_low
 primary_label: HD
 alternate_label: SD

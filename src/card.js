@@ -40,6 +40,7 @@ export class IntercomCameraCard extends IntercomStream {
     set hass(hass) {
         const previous = this._hass;
         this._hass = hass;
+        if (this.shadowRoot) this.updateFallbackImage();
         if (this.isConnected) this.buttons.updateStatefulButtons(previous);
         if (!previous && this.config && !this.isConnected) {
             this.getSignedPath().catch(() => {});
@@ -106,6 +107,13 @@ export class IntercomCameraCard extends IntercomStream {
         shadow.innerHTML = CARD_TEMPLATE;
 
         this.$ = (selectors) => this.shadowRoot.querySelector(selectors);
+        const image = this.$('.fallback-image');
+        image.addEventListener('load', () => {
+            image.hidden = false;
+        });
+        image.addEventListener('error', () => {
+            image.hidden = true;
+        });
         this.$('.video-wrap').appendChild(this.video);
 
         this.applyConfigToDom();
@@ -158,12 +166,24 @@ export class IntercomCameraCard extends IntercomStream {
     applyConfigToDom() {
         if (!this.shadowRoot || !this.config) return;
 
+        this.updateFallbackImage();
         this.buttons.renderActionButtons();
         this.updateStreamToggle();
         this.updateTalkButton();
         this.buttons.updateStatefulButtons();
         this.pan.applyVideoPan();
         if (!this.hasVideoSource()) this.showStatus('Camera source unavailable');
+    }
+
+    updateFallbackImage() {
+        const image = this.$('.fallback-image');
+        const entity = this.config?.poster_entity || this.config?.entity;
+        const picture = this.hass?.states?.[entity]?.attributes?.entity_picture;
+        const url = picture ? this.hass.hassUrl(picture) : '';
+        if (image.getAttribute('src') === url) return;
+        image.hidden = true;
+        if (url) image.src = url;
+        else image.removeAttribute('src');
     }
 
     updateStreamToggle() {

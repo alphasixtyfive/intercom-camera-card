@@ -82,6 +82,10 @@ test('configuration errors are reported at the boundary without mutating YAML', 
     );
     assert.throws(() => normalizeConfig({ entity: 'light.porch' }), /camera entity/);
     assert.throws(
+        () => normalizeConfig({ stream: 'door', poster_entity: 'light.porch' }),
+        /poster_entity must be a camera entity/,
+    );
+    assert.throws(
         () => normalizeConfig({ stream: 'door', buttons: [{ title: {} }] }),
         /buttons\[0\].title must be a string/,
     );
@@ -329,6 +333,39 @@ test('loading stays centered until the visible video plays', () => {
     assert.equal(element.$('.status').classList.contains('centered'), false);
 });
 
+test('a Home Assistant still image covers a cold connection without reconnecting', () => {
+    const element = card({ ...config, poster_entity: 'camera.door' });
+    const image = element.$('.fallback-image');
+    const generation = element.connectionGeneration;
+    let requestedPicture;
+    assert.equal(element.video.classList.contains('loading'), true);
+    assert.equal(element.video.hasAttribute('poster'), false);
+    assert.equal(image.hidden, true);
+
+    element.hass = {
+        ...hass,
+        hassUrl: (picture) => {
+            requestedPicture = picture;
+            return 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+        },
+        states: {
+            ...states,
+            'camera.door': {
+                state: 'idle',
+                attributes: { entity_picture: '/api/camera_proxy/camera.door?token=test' },
+            },
+        },
+    };
+    assert.equal(requestedPicture, '/api/camera_proxy/camera.door?token=test');
+    assert.ok(image.getAttribute('src').startsWith('data:image/gif;base64,'));
+    image.dispatchEvent(new window.Event('load'));
+    assert.equal(image.hidden, false);
+    assert.equal(element.connectionGeneration, generation);
+
+    image.dispatchEvent(new window.Event('error'));
+    assert.equal(image.hidden, true);
+});
+
 test('signaling URL preserves HA signing and encodes sources safely', () => {
     const element = card({
         entity: 'camera.door',
@@ -428,7 +465,7 @@ test('labels are text rather than executable markup', () => {
         stream: 'door',
         buttons: [{ title: '<img src=x onerror=alert(1)>', tap_action: { action: 'none' } }],
     });
-    assert.equal(element.shadowRoot.querySelector('img'), null);
+    assert.equal(element.shadowRoot.querySelector('img[src="x"]'), null);
     assert.equal(element.$('[data-button-id]').title, '<img src=x onerror=alert(1)>');
 });
 

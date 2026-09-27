@@ -9,6 +9,7 @@ export function normalizeConfig(value) {
         'stream',
         'url',
         'entity',
+        'poster_entity',
         'alternate_stream',
         'server',
         'primary_label',
@@ -25,6 +26,9 @@ export function normalizeConfig(value) {
     }
     if (config.entity && !/^camera\.[\w]+$/.test(config.entity)) {
         throw new Error('entity must be a camera entity.');
+    }
+    if (config.poster_entity && !/^camera\.[\w]+$/.test(config.poster_entity)) {
+        throw new Error('poster_entity must be a camera entity.');
     }
     for (const key of ['mobile_pan', 'pan']) {
         if (config[key] !== undefined && typeof config[key] !== 'boolean')
@@ -127,6 +131,7 @@ export function getConfigForm() {
     return {
         schema: [
             { name: 'entity', selector: { entity: { domain: 'camera' } } },
+            { name: 'poster_entity', selector: { entity: { domain: 'camera' } } },
             ...['stream', 'alternate_stream', 'primary_label', 'alternate_label', 'server'].map(
                 (name) => ({ name, selector: { text: {} } }),
             ),
@@ -138,6 +143,7 @@ export function getConfigForm() {
         computeLabel: ({ name }) =>
             ({
                 stream: 'go2rtc stream',
+                poster_entity: 'Loading image camera',
                 alternate_stream: 'Alternate stream',
                 primary_label: 'Primary label',
                 alternate_label: 'Alternate label',
@@ -150,9 +156,11 @@ export function getConfigForm() {
         computeHelper: ({ name }) =>
             name === 'entity'
                 ? 'Choose a camera entity, or leave this empty and enter a go2rtc stream below.'
-                : name === 'talk'
-                  ? 'Enabled by default. Configure action buttons and custom talk labels in YAML.'
-                  : undefined,
+                : name === 'poster_entity'
+                  ? 'Optional still image shown while a go2rtc stream connects.'
+                  : name === 'talk'
+                    ? 'Enabled by default. Configure action buttons and custom talk labels in YAML.'
+                    : undefined,
         assertConfig: (config) => {
             if (isObject(config.talk) || typeof config.player === 'string') {
                 throw new Error(

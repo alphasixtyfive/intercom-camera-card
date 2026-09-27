@@ -31,7 +31,19 @@ export const CARD_TEMPLATE = `
         container-type: inline-size;
     }
     .video-wrap { position: absolute; inset: 0; }
+    .fallback-image {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: var(--intercom-fit);
+        object-position: var(--intercom-video-pan-x, 50%) center;
+        filter: blur(7px) brightness(0.62);
+        transform: scale(1.025);
+    }
+    .fallback-image[hidden] { display: none; }
     video {
+        position: relative;
         display: block;
         width: 100%;
         height: 100%;
@@ -44,6 +56,7 @@ export const CARD_TEMPLATE = `
         filter: blur(7px) brightness(0.62);
         transform: scale(1.025);
     }
+    video.loading:not([poster]) { opacity: 0; }
     .stage.pannable video { cursor: grab; }
     .stage.pannable .video-wrap { touch-action: pan-y; }
     .stage.panning video { cursor: grabbing; }
@@ -229,7 +242,7 @@ export const CARD_TEMPLATE = `
 </style>
 <ha-card>
     <div class="stage">
-        <div class="video-wrap"></div>
+        <div class="video-wrap"><img class="fallback-image" alt="" hidden></div>
         <div class="shade"></div>
         <div class="top-bar">
             <button class="stream-toggle" type="button" hidden><ha-icon icon="mdi:video-switch" aria-hidden="true"></ha-icon><span class="stream-label"></span></button>
