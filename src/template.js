@@ -129,11 +129,17 @@ export const CARD_TEMPLATE = `
         bottom: max(16px, calc(env(safe-area-inset-bottom) + 8px));
         z-index: 2;
         display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
+        flex-wrap: nowrap;
+        justify-content: safe center;
         gap: 12px;
         box-sizing: border-box;
         width: min(620px, calc(100% - 24px));
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 6px 0 12px;
+        overscroll-behavior-inline: contain;
+        scrollbar-color: rgba(255, 255, 255, 0.45) transparent;
+        scrollbar-width: thin;
         transform: translateX(-50%);
     }
     .button-group { display: contents; }
@@ -143,6 +149,7 @@ export const CARD_TEMPLATE = `
         flex-direction: column;
         align-items: center;
         justify-content: center;
+        min-width: 0;
         min-height: 68px;
         padding: 0;
         border: 0;
@@ -170,8 +177,9 @@ export const CARD_TEMPLATE = `
         justify-content: center;
         flex: 0 0 auto;
         box-sizing: border-box;
-        width: 68px;
-        height: 68px;
+        width: min(68px, 100%);
+        height: auto;
+        aspect-ratio: 1;
         border: var(--button-border, 1px solid rgba(255, 255, 255, 0.22));
         border-radius: 50%;
         color: var(--button-color, #fff);
@@ -201,14 +209,13 @@ export const CARD_TEMPLATE = `
         .status { left: 10px; top: 10px; }
         .controls { gap: 8px; width: min(340px, calc(100% - 20px)); }
         .controls button {
-            flex-basis: 90px;
+            flex: 0 0 calc(20% - 7px);
             min-height: 60px;
         }
-        .controls ha-icon { --mdc-icon-size: 25px; width: 60px; height: 60px; }
+        .controls ha-icon { --mdc-icon-size: 25px; width: min(60px, 100%); }
     }
     @container (max-width: 350px) {
-        .controls button { flex-basis: 82px; }
-        .controls ha-icon { width: 56px; height: 56px; }
+        .controls ha-icon { width: min(56px, 100%); }
     }
     @media (prefers-reduced-motion: reduce) {
         button, .controls ha-icon, .status, video { transition: none; }

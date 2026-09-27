@@ -92,6 +92,14 @@
                 { tts: 'Please leave the parcel by the door.', title: 'Parcel', position: 'right' },
             ],
         };
+        if (new URLSearchParams(location.search).has('overflow')) {
+            settings.buttons.push({
+                title: 'Extra',
+                icon: 'mdi:bell',
+                position: 'right',
+                tap_action: { action: 'more-info', entity: 'light.porch' },
+            });
+        }
         const states = {
             'cover.gate': { state: 'closed' },
             'light.porch': { state: 'off' },
