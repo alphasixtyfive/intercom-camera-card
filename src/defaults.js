@@ -17,13 +17,13 @@ export const TALK_BUTTON = {
     active_title: 'Hang up',
     icon: 'mdi:microphone',
     active_icon: 'mdi:phone-hangup',
-    color: '#fff',
-    active_color: '#fff',
-    busy_color: '#07111f',
-    background: 'var(--success-color, #159447)',
-    hover_background: 'var(--success-color, #18a95a)',
-    active_background: 'var(--error-color, #db4437)',
-    busy_background: 'var(--warning-color, #e6a23c)',
+    color: 'var(--ha-color-on-success-loud, #fff)',
+    active_color: 'var(--ha-color-on-danger-loud, #fff)',
+    busy_color: 'var(--ha-color-on-warning-loud, #07111f)',
+    background: 'var(--ha-color-fill-success-loud-resting, var(--success-color, #159447))',
+    hover_background: 'var(--ha-color-fill-success-loud-hover, var(--success-color, #18a95a))',
+    active_background: 'var(--ha-color-fill-danger-loud-resting, var(--error-color, #db4437))',
+    busy_background: 'var(--ha-color-fill-warning-loud-resting, var(--warning-color, #e6a23c))',
     starting_status: 'Connecting microphone',
     ending_status: 'Ending talk',
     active_status: 'Talking',
@@ -34,23 +34,23 @@ export const SOUND_BASE_PATH = '/local/sounds/';
 
 export const BUTTON_STYLE_PRESETS = {
     alert: {
-        color: '#fff',
-        background: 'var(--error-color, #db4437)',
+        color: 'var(--ha-color-on-danger-loud, #fff)',
+        background: 'var(--ha-color-fill-danger-loud-resting, var(--error-color, #db4437))',
     },
     primary: {
-        color: '#fff',
-        background: 'var(--primary-color, #03a9f4)',
+        color: 'var(--ha-color-on-primary-loud, #fff)',
+        background: 'var(--ha-color-fill-primary-loud-resting, var(--primary-color, #03a9f4))',
     },
     warning: {
-        color: '#07111f',
-        background: 'var(--warning-color, #e6a23c)',
+        color: 'var(--ha-color-on-warning-loud, #07111f)',
+        background: 'var(--ha-color-fill-warning-loud-resting, var(--warning-color, #e6a23c))',
     },
     light: {
         color: '#fff',
     },
     light_on: {
-        color: '#07111f',
-        background: 'var(--warning-color, #e6a23c)',
+        color: 'var(--ha-color-on-warning-loud, #07111f)',
+        background: 'var(--ha-color-fill-warning-loud-resting, var(--warning-color, #e6a23c))',
     },
     disabled: {
         color: 'var(--disabled-text-color, #888)',
