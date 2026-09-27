@@ -15,7 +15,10 @@ var T="video,audio",_="video,audio,microphone",v="webrtc";var S="intercom-camera
         min-height: 328px;
         overflow: hidden;
     }
-    :host([panel]) ha-card { height: var(--intercom-height); }
+    :host([panel]) ha-card {
+        height: var(--intercom-height);
+        border-radius: var(--ha-border-radius-lg, 12px);
+    }
     .stage {
         position: relative;
         isolation: isolate;
@@ -64,7 +67,7 @@ var T="video,audio",_="video,audio,microphone",v="webrtc";var S="intercom-camera
         appearance: none;
         box-sizing: border-box;
         border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.15));
-        border-radius: var(--ha-card-border-radius, 12px);
+        border-radius: var(--ha-border-radius-md, 8px);
         color: var(--button-color, var(--primary-text-color, #fff));
         background: var(--button-background, rgba(255, 255, 255, 0.08));
         cursor: pointer;
@@ -105,7 +108,7 @@ var T="video,audio",_="video,audio,microphone",v="webrtc";var S="intercom-camera
         z-index: 2;
         max-width: min(calc(100% - 32px), 420px);
         padding: 8px 12px;
-        border-radius: var(--ha-card-border-radius, 12px);
+        border-radius: var(--ha-border-radius-md, 8px);
         color: #fff;
         background: rgba(0, 0, 0, 0.64);
         font: var(--ha-font-weight-medium, 500) var(--ha-font-size-m, 14px)/1.3 var(--ha-font-family-body, sans-serif);
@@ -202,7 +205,6 @@ var T="video,audio",_="video,audio,microphone",v="webrtc";var S="intercom-camera
         :host([panel]) ha-card {
             height: var(--intercom-height-mobile);
             min-height: 360px;
-            border-radius: var(--ha-border-radius-lg, 12px);
         }
     }
     @container (max-width: 680px) {
