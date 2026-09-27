@@ -67,7 +67,10 @@ export class IntercomButtons {
                 merged.states[state].tap_action = this.normalizeLovelaceAction(override.tap_action);
             }
         }
-        const title = merged.title || this.defaultButtonTitle(merged) || '';
+        let fallbackTitle = 'Run action';
+        if (button.sound) fallbackTitle = 'Play sound';
+        else if (button.tts || button.message) fallbackTitle = 'Play message';
+        const title = merged.title || this.defaultButtonTitle(merged) || fallbackTitle;
         const tapAction = this.normalizeLovelaceAction(
             button.tap_action || defaults.tap_action || button,
         );
@@ -104,9 +107,14 @@ export class IntercomButtons {
     }
 
     soundButtonDefaults(button) {
-        const player =
-            button.player || this.config.player || this.defaultPlayerEntity(button.entity);
-        if (!player) return this.appearanceDefaults(button.appearance || 'alert');
+        const player = button.player || this.config.player;
+        if (!player) {
+            return {
+                ...this.appearanceDefaults(button.appearance || 'alert'),
+                audio: true,
+                icon: button.icon || 'mdi:bullhorn',
+            };
+        }
 
         return {
             ...this.appearanceDefaults(button.appearance || 'alert'),
@@ -126,12 +134,16 @@ export class IntercomButtons {
     }
 
     ttsButtonDefaults(button) {
-        const player =
-            button.player || this.config.player || this.defaultPlayerEntity(button.entity);
+        const player = button.player || this.config.player;
         const message = button.tts || button.message;
         const ttsEntity = button.tts_entity || this.config.tts_entity || DEFAULT_TTS_ENTITY;
-        if (!player || !message || !ttsEntity)
-            return this.appearanceDefaults(button.appearance || 'alert');
+        if (!player || !message || !ttsEntity) {
+            return {
+                ...this.appearanceDefaults(button.appearance || 'alert'),
+                audio: true,
+                icon: button.icon || 'mdi:message-alert',
+            };
+        }
 
         return {
             ...this.appearanceDefaults(button.appearance || 'alert'),
@@ -170,18 +182,18 @@ export class IntercomButtons {
                     title: `${title} off`,
                     icon: button.icon || 'mdi:lightbulb-off-outline',
                 },
-                unavailable: {
-                    ...this.appearanceDefaults('disabled'),
-                    title: `${title} unavailable`,
-                    icon: 'mdi:lightbulb-alert',
-                    disabled: true,
-                },
-                unknown: {
-                    ...this.appearanceDefaults('disabled'),
-                    title: `${title} unknown`,
-                    icon: 'mdi:lightbulb-alert',
-                    disabled: true,
-                },
+                unavailable: this.unavailableButtonConfig(
+                    { title },
+                    'unavailable',
+                    undefined,
+                    'mdi:lightbulb-alert',
+                ),
+                unknown: this.unavailableButtonConfig(
+                    { title },
+                    'unknown',
+                    undefined,
+                    'mdi:lightbulb-alert',
+                ),
             },
         };
     }
@@ -222,18 +234,8 @@ export class IntercomButtons {
                     icon: closedIcon,
                     disabled: true,
                 },
-                unavailable: {
-                    ...this.appearanceDefaults('disabled'),
-                    title: `${title} unavailable`,
-                    icon: 'mdi:alert-circle-outline',
-                    disabled: true,
-                },
-                unknown: {
-                    ...this.appearanceDefaults('disabled'),
-                    title: `${title} unknown`,
-                    icon: 'mdi:alert-circle-outline',
-                    disabled: true,
-                },
+                unavailable: this.unavailableButtonConfig({ title }),
+                unknown: this.unavailableButtonConfig({ title }, 'unknown'),
             },
         };
     }
@@ -256,14 +258,6 @@ export class IntercomButtons {
         if (!path) return path;
         if (path.startsWith('/') || path.includes('://')) return path;
         return SOUND_BASE_PATH + path;
-    }
-
-    defaultPlayerEntity(entityId) {
-        if (this.entityDomain(entityId) === 'media_player') return entityId;
-
-        const stream = this.config.stream;
-        if (typeof stream !== 'string' || !/^[a-z0-9_]+$/i.test(stream)) return undefined;
-        return `media_player.${stream.toLowerCase()}`;
     }
 
     defaultCoverIcon(button, open) {
@@ -394,11 +388,6 @@ export class IntercomButtons {
         this.setOptionalVar(button, '--button-hover-background', visual.hover_background);
         this.setOptionalVar(button, '--button-border', visual.border);
 
-        if (state) {
-            button.dataset.entityState = state;
-        } else {
-            delete button.dataset.entityState;
-        }
         button.hidden = this.buttonHidden(stateConfig);
         this.syncButtonDisabled(button, config, state, stateConfig);
     }
@@ -515,9 +504,6 @@ export class IntercomButtons {
             stateDisabled ||
             audioDisabled ||
             actionDisabled;
-        button.classList.toggle('state-disabled', stateDisabled);
-        button.classList.toggle('audio-disabled', audioDisabled);
-        button.classList.toggle('action-disabled', actionDisabled);
         if (audioDisabled) {
             button.title = 'Hang up before playing audio';
             button.setAttribute('aria-label', button.title);

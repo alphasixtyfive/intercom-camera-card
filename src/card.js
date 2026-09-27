@@ -116,7 +116,13 @@ export class IntercomCameraCard extends IntercomStream {
     }
 
     bindControls() {
-        this.$('.stage').addEventListener('pointerup', () => this.enableAudio(), { passive: true });
+        this.$('.video-wrap').addEventListener(
+            'pointerup',
+            () => {
+                if (!this.pan.panGesture?.active) this.enableAudio();
+            },
+            { passive: true },
+        );
         this.$('.stage').addEventListener('keydown', (event) => {
             if (event.target !== this.video || !['Enter', ' '].includes(event.key)) return;
             event.preventDefault();
@@ -172,7 +178,7 @@ export class IntercomCameraCard extends IntercomStream {
         const nextLabel = this.streamLabel(nextVariant);
         const title = this.talking ? 'Hang up before switching stream' : `Switch to ${nextLabel}`;
 
-        button.textContent = currentLabel;
+        this.$('.stream-label').textContent = currentLabel;
         button.title = title;
         button.disabled = this.talking;
         button.setAttribute('aria-label', title);
@@ -210,7 +216,6 @@ export class IntercomCameraCard extends IntercomStream {
         const buttonTitle = sourceUnavailable ? 'Camera source unavailable' : title;
 
         button.classList.toggle('active', this.talking);
-        button.classList.toggle('source-disabled', sourceUnavailable);
         button.disabled = sourceUnavailable || (button.classList.contains('busy') && !this.talking);
         button.title = buttonTitle;
         button.setAttribute('aria-label', buttonTitle);
@@ -247,7 +252,6 @@ export class IntercomCameraCard extends IntercomStream {
         const sourceUnavailable = !this.hasVideoSource();
         button.disabled = (Boolean(busy) && !this.talking) || sourceUnavailable;
         button.classList.toggle('busy', Boolean(busy));
-        button.classList.toggle('source-disabled', sourceUnavailable);
         button.setAttribute('aria-busy', busy ? 'true' : 'false');
         if (sourceUnavailable && !busy) {
             button.title = 'Camera source unavailable';

@@ -81,6 +81,10 @@ test('configuration errors are reported at the boundary without mutating YAML', 
         /states/,
     );
     assert.throws(() => normalizeConfig({ entity: 'light.porch' }), /camera entity/);
+    assert.throws(
+        () => normalizeConfig({ stream: 'door', buttons: [{ title: {} }] }),
+        /buttons\[0\].title must be a string/,
+    );
     const source = { url: 'rtsp://example', pan: false, buttons: [{ entity: 'light.porch' }] };
     const result = normalizeConfig(source);
     result.buttons[0].title = 'Changed';
@@ -191,6 +195,54 @@ test('keyboard activation enables audio and buttons keep clear action labels', (
     assert.equal(talk.getAttribute('aria-label'), 'Talk');
     assert.equal(talk.hasAttribute('aria-pressed'), false);
     assert.equal(element.$('.stream-toggle').hasAttribute('aria-pressed'), false);
+});
+
+test('icon-only controls retain their action names as entity state changes', () => {
+    const element = card();
+    assert.equal(element.$('.identity'), null);
+    assert.equal(element.$('.stream-label').textContent, 'Main');
+    assert.equal(element.$('.talk').getAttribute('aria-label'), 'Talk');
+    assert.equal(element.$('.talk').children.length, 1);
+    const gate = element.$('[data-button-id="left-1"]');
+    assert.equal(gate.children.length, 1);
+    assert.equal(gate.getAttribute('aria-label'), 'Open Gate');
+    element.hass = { ...hass, states: { ...states, 'cover.gate': { state: 'open' } } };
+    assert.equal(gate.getAttribute('aria-label'), 'Close Gate');
+    assert.equal(gate.title, 'Close Gate');
+    element.setTalking(true);
+    assert.equal(element.$('.talk').getAttribute('aria-label'), 'Hang up');
+});
+
+test('an icon-only custom action without a title has a useful accessible name', () => {
+    const element = card({
+        stream: 'door',
+        buttons: [{ tap_action: { action: 'perform-action', perform_action: 'script.turn_on' } }],
+    });
+    assert.equal(element.$('[data-button-id]').getAttribute('aria-label'), 'Run action');
+});
+
+test('only the video surface activates camera audio', () => {
+    const element = card();
+    let audioEnables = 0;
+    element.enableAudio = () => audioEnables++;
+    element.$('.talk').dispatchEvent(new window.Event('pointerup', { bubbles: true }));
+    assert.equal(audioEnables, 0);
+    element.pan.panGesture = { active: true };
+    element.video.dispatchEvent(new window.Event('pointerup', { bubbles: true }));
+    assert.equal(audioEnables, 0);
+    element.pan.panGesture = null;
+    element.video.dispatchEvent(new window.Event('pointerup', { bubbles: true }));
+    assert.equal(audioEnables, 1);
+});
+
+test('audio buttons require an explicit player', () => {
+    const element = card({
+        stream: 'door',
+        buttons: [{ title: 'Warning', sound: 'warning.wav' }],
+    });
+    const warning = element.$('[data-button-id="left-0"]');
+    assert.equal(warning.disabled, true);
+    assert.equal(warning.title, 'Audio target unavailable');
 });
 
 test('talk disables audio and unavailable entities stay disabled', () => {

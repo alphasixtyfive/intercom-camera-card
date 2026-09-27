@@ -100,7 +100,7 @@ Set at least one of `stream`, `entity`, or `url`. Basic settings are available i
 
 ## Buttons
 
-Buttons appear left of Talk unless you set `position: right`. An entity button uses its Home Assistant state:
+Buttons show icons, with their current action name available to screen readers and as a tooltip. They appear left of Talk unless you set `position: right`. An entity button uses its Home Assistant state:
 
 - A `light` toggles on and off.
 - A `cover` opens when closed and closes when open.
@@ -108,7 +108,7 @@ Buttons appear left of Talk unless you set `position: right`. An entity button u
 
 Unavailable lights and covers are disabled. You can also set `hidden: true` or `disabled: true` on a button.
 
-A sound button plays a file through `player`. Relative file names are read from `/local/sounds/`:
+A sound button plays a file through `player`. Set `player` on the card or button; the card does not infer a speaker from the stream name. Relative file names are read from `/local/sounds/`:
 
 ```yaml
 player: media_player.front_gate
