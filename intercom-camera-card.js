@@ -202,7 +202,7 @@ var T="video,audio",_="video,audio,microphone",v="webrtc";var S="intercom-camera
         :host([panel]) ha-card {
             height: var(--intercom-height-mobile);
             min-height: 360px;
-            border-radius: 0;
+            border-radius: var(--ha-border-radius-lg, 12px);
         }
     }
     @container (max-width: 680px) {
