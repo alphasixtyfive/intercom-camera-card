@@ -90,7 +90,7 @@ export const CARD_TEMPLATE = `
         flex: 0 0 auto;
         min-height: 44px;
         padding: 0 14px;
-        border-radius: 999px;
+        border-radius: var(--ha-border-radius-pill, 999px);
         pointer-events: auto;
         color: #fff;
         background: rgba(0, 0, 0, 0.54);
@@ -107,9 +107,11 @@ export const CARD_TEMPLATE = `
         z-index: 2;
         max-width: min(calc(100% - 32px), 420px);
         padding: 8px 12px;
-        border-radius: var(--ha-border-radius-md, 8px);
+        border-radius: var(--ha-border-radius-pill, 999px);
         color: #fff;
         background: rgba(0, 0, 0, 0.64);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
         font: var(--ha-font-weight-medium, 500) var(--ha-font-size-m, 14px)/1.3 var(--ha-font-family-body, sans-serif);
         opacity: 0;
         pointer-events: none;
@@ -134,7 +136,7 @@ export const CARD_TEMPLATE = `
         display: flex;
         flex-wrap: nowrap;
         justify-content: safe center;
-        gap: 12px;
+        gap: 8px;
         box-sizing: border-box;
         width: min(620px, calc(100% - 24px));
         overflow-x: auto;
@@ -162,9 +164,7 @@ export const CARD_TEMPLATE = `
     @media (hover: hover) {
         .controls button:hover { background: transparent; }
         .controls button:not(:disabled):hover ha-icon {
-            transform: translateY(-2px) scale(1.04);
             background: var(--button-hover-background, var(--button-background, rgba(45, 45, 45, 0.84)));
-            box-shadow: 0 9px 24px rgba(0, 0, 0, 0.42);
         }
     }
     .controls button:focus-visible { outline: none; }
@@ -209,7 +209,7 @@ export const CARD_TEMPLATE = `
     @container (max-width: 680px) {
         .top-bar { inset: 10px 10px auto; }
         .status { left: 10px; top: 10px; }
-        .controls { gap: 8px; width: min(340px, calc(100% - 20px)); }
+        .controls { gap: 6px; width: min(340px, calc(100% - 20px)); }
         .controls button {
             flex: 0 0 calc(20% - 7px);
             min-height: 60px;
