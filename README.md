@@ -149,7 +149,7 @@ Buttons can also have `states` overrides for their title, icon, colors, action, 
 
 Press Talk to connect your browser microphone; press it again to hang up. Sound and TTS buttons are disabled during Talk so they do not compete for the intercom speaker. If microphone access fails, the card shows a short message. Check browser permission, HTTPS, and your camera's go2rtc talkback setup.
 
-While video connects, the message stays in the center. If you return to the same camera in the current tab, the card can show a blurred, dimmed copy of its last frame for up to two minutes. A first visit or page reload starts with a plain background. Brief connection drops can recover; repeated failures use a longer retry delay.
+While video connects, the card shows a blurred, dimmed still image from the camera's `entity_picture` when available. If you return to the same camera in the current tab, a recent frame can appear instead for up to two minutes. Brief connection drops can recover; repeated failures use a longer retry delay.
 
 On a small screen, drag the video horizontally to adjust the crop. The card remembers the position for each stream. Use `mobile_pan: false` to disable this.
 
