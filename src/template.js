@@ -138,7 +138,7 @@ export const CARD_TEMPLATE = `
         display: flex;
         flex-wrap: nowrap;
         justify-content: safe center;
-        gap: 8px;
+        gap: 18px;
         box-sizing: border-box;
         width: min(620px, calc(100% - 24px));
         overflow-x: auto;
@@ -152,7 +152,7 @@ export const CARD_TEMPLATE = `
     .button-group { display: contents; }
     .controls button {
         display: flex;
-        flex: 0 0 100px;
+        flex: 0 0 68px;
         flex-direction: column;
         align-items: center;
         justify-content: center;
@@ -211,14 +211,16 @@ export const CARD_TEMPLATE = `
     @container (max-width: 680px) {
         .top-bar { inset: 10px 10px auto; }
         .status { left: 10px; top: 10px; }
-        .controls { gap: 6px; width: min(340px, calc(100% - 20px)); }
+        .controls { gap: 10px; width: min(340px, calc(100% - 20px)); }
         .controls button {
-            flex: 0 0 calc(20% - 7px);
+            flex-basis: 60px;
             min-height: 60px;
         }
         .controls ha-icon { --mdc-icon-size: 25px; width: min(60px, 100%); }
     }
     @container (max-width: 350px) {
+        .controls { gap: 8px; }
+        .controls button { flex-basis: 56px; }
         .controls ha-icon { width: min(56px, 100%); }
     }
     @media (prefers-reduced-motion: reduce) {
