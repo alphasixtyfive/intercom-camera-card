@@ -8,6 +8,7 @@ import {
     DEFAULT_PRIMARY_STREAM_LABEL,
     DEFAULT_ALTERNATE_STREAM_LABEL,
 } from './defaults.js';
+import { readPreference, writePreference } from './preferences.js';
 
 const CACHED_FRAME_LIFETIME_MS = 2 * 60 * 1000;
 const MAX_CACHED_FRAMES = 4;
@@ -30,7 +31,6 @@ export class IntercomStream extends VideoRTC {
         this.talking = false;
         this.streamVariant = 'primary';
         this.localMicrophoneTracks = [];
-        this.keepFrameOnDisconnect = false;
         this.posterGeneration = 0;
         this.posterURL = null;
         this.posterCapturePending = false;
@@ -147,26 +147,11 @@ export class IntercomStream extends VideoRTC {
     }
 
     loadStreamVariant() {
-        const key = this.streamPreferenceKey();
-        if (!key) return 'primary';
-
-        try {
-            return localStorage.getItem(key) === 'alternate' ? 'alternate' : 'primary';
-        } catch (err) {
-            console.debug(err);
-            return 'primary';
-        }
+        return readPreference(this.streamPreferenceKey()) === 'alternate' ? 'alternate' : 'primary';
     }
 
     saveStreamVariant() {
-        const key = this.streamPreferenceKey();
-        if (!key) return;
-
-        try {
-            localStorage.setItem(key, this.streamVariant);
-        } catch (err) {
-            console.debug(err);
-        }
+        writePreference(this.streamPreferenceKey(), this.streamVariant);
     }
 
     onconnect() {
@@ -268,42 +253,28 @@ export class IntercomStream extends VideoRTC {
 
     showCachedFrame() {
         if (this.posterURL || this.posterCapturePending) return;
-        const cached = cachedFrames.get(this.frameCacheKey());
+        const key = this.frameCacheKey();
+        const cached = cachedFrames.get(key);
         if (!cached) return;
         if (Date.now() - cached.savedAt > CACHED_FRAME_LIFETIME_MS) {
-            cachedFrames.delete(this.frameCacheKey());
+            cachedFrames.delete(key);
             return;
         }
-        this.posterURL = URL.createObjectURL(cached.blob);
-        this.video.poster = this.posterURL;
+        this.setPoster(cached.blob);
     }
 
     cacheLastFrame() {
         if (!this.hasPlayedFrame || !this.video.videoWidth || !this.video.videoHeight) return;
         const source = this.frameCacheKey();
         const capturedAt = Date.now();
-        try {
-            const canvas = document.createElement('canvas');
-            const scale = Math.min(1, 640 / this.video.videoWidth, 360 / this.video.videoHeight);
-            canvas.width = Math.max(1, Math.round(this.video.videoWidth * scale));
-            canvas.height = Math.max(1, Math.round(this.video.videoHeight * scale));
-            canvas.getContext('2d').drawImage(this.video, 0, 0, canvas.width, canvas.height);
-            canvas.toBlob(
-                (blob) => {
-                    if (!blob) return;
-                    if ((cachedFrames.get(source)?.savedAt ?? 0) > capturedAt) return;
-                    cachedFrames.set(source, { blob, savedAt: capturedAt });
-                    if (cachedFrames.size > MAX_CACHED_FRAMES) {
-                        const oldest = cachedFrames.keys().next().value;
-                        cachedFrames.delete(oldest);
-                    }
-                },
-                'image/jpeg',
-                0.6,
-            );
-        } catch (err) {
-            console.debug(err);
-        }
+        encodeFrame(this.video, 640, 360, 0.6, (blob) => {
+            if (!blob || (cachedFrames.get(source)?.savedAt ?? 0) > capturedAt) return;
+            cachedFrames.delete(source);
+            cachedFrames.set(source, { blob, savedAt: capturedAt });
+            if (cachedFrames.size > MAX_CACHED_FRAMES) {
+                cachedFrames.delete(cachedFrames.keys().next().value);
+            }
+        });
     }
 
     openSocket(generation) {
@@ -330,10 +301,7 @@ export class IntercomStream extends VideoRTC {
             }
         });
         socket.addEventListener('close', () => {
-            if (!current() || this.pcState === WebSocket.OPEN) return;
-            this.ondisconnect();
-            this.showStatus('Reconnecting video', 0, 'center');
-            this.scheduleReconnect();
+            if (current() && this.pcState !== WebSocket.OPEN) this.restartPeer();
         });
     }
 
@@ -352,20 +320,15 @@ export class IntercomStream extends VideoRTC {
         if (!('RTCPeerConnection' in window)) {
             this.ondisconnect();
             this.showStatus('WebRTC unsupported');
-            this.setTalkBusy(false);
             return;
         }
 
         this.onmessage.intercom = (msg) => {
-            switch (msg.type) {
-                case 'error':
-                    console.warn(msg.value);
-                    this.ondisconnect();
-                    this.showStatus(this.streamErrorStatus(msg.value), 3200);
-                    this.setTalkBusy(false);
-                    this.scheduleReconnect();
-                    break;
-            }
+            if (msg.type !== 'error') return;
+            console.warn(msg.value);
+            this.ondisconnect();
+            this.showStatus(msg.value ? 'Unable to connect to the camera' : 'Stream error', 3200);
+            this.scheduleReconnect();
         };
         this.onwebrtc();
     }
@@ -375,11 +338,9 @@ export class IntercomStream extends VideoRTC {
         if (this.pcState !== WebSocket.OPEN) return;
         this.playbackGeneration = this.connectionGeneration;
         this.playbackMicrophoneRequested = microphoneRequested;
-        if (this.talking && microphoneRequested) {
-            if (!this.hasLiveMicrophoneTrack()) {
-                this.setTalking(false);
-                this.showStatus('Microphone unavailable', 3200);
-            }
+        if (this.talking && microphoneRequested && !this.hasLiveMicrophoneTrack()) {
+            this.setTalking(false);
+            this.showStatus('Microphone unavailable', 3200);
         }
     }
 
@@ -399,8 +360,9 @@ export class IntercomStream extends VideoRTC {
 
     async createOffer(pc) {
         const generation = this.connectionGeneration;
+        const current = () => generation === this.connectionGeneration && pc === this.pc;
         try {
-            if (this.media.indexOf('microphone') >= 0) {
+            if (this.media.includes('microphone')) {
                 if (this.talking) {
                     this.showStatus(this.talkButton.requesting_status);
                 }
@@ -408,12 +370,7 @@ export class IntercomStream extends VideoRTC {
                     throw new Error('getUserMedia unavailable');
                 }
                 const media = await navigator.mediaDevices.getUserMedia({ audio: true });
-                if (
-                    generation !== this.connectionGeneration ||
-                    pc !== this.pc ||
-                    !this.talking ||
-                    !this.shouldStream()
-                ) {
+                if (!current() || !this.talking || !this.shouldStream()) {
                     this.stopStreamTracks(media);
                     return null;
                 }
@@ -437,24 +394,23 @@ export class IntercomStream extends VideoRTC {
                 }
             }
         } catch (err) {
-            if (generation !== this.connectionGeneration || pc !== this.pc) return null;
+            if (!current()) return null;
             this.onMicrophoneError(err);
         }
 
         for (const kind of ['video', 'audio']) {
-            if (this.media.indexOf(kind) >= 0) {
+            if (this.media.includes(kind)) {
                 pc.addTransceiver(kind, { direction: 'recvonly' });
             }
         }
 
         const offer = await pc.createOffer();
-        if (generation !== this.connectionGeneration || pc !== this.pc) return null;
+        if (!current()) return null;
         await pc.setLocalDescription(offer);
-        if (generation !== this.connectionGeneration || pc !== this.pc) return null;
-        return offer;
+        return current() ? offer : null;
     }
 
-    ondisconnect() {
+    ondisconnect(keepFrame = false) {
         this.connectionGeneration++;
         this.signing = false;
         this.signedPathPromise = null;
@@ -466,42 +422,42 @@ export class IntercomStream extends VideoRTC {
         this.connectionTimeout = 0;
         clearTimeout(this.statusTimeout);
         this.statusTimeout = 0;
-        const fullDisconnect = !this.keepFrameOnDisconnect;
-        if (fullDisconnect) {
+
+        const { ws, pc, pendingVideo, video } = this;
+        if (keepFrame) {
+            if (pc) this.capturePoster();
+        } else {
             this.cacheLastFrame();
             this.hasPlayedFrame = false;
-            this.posterCapturePending = false;
             if (this.talking) this.setTalking(false);
             this.pendingConnectStatus = undefined;
             this.setTalkBusy(false);
-            this.showStatus('', 0);
+            this.showStatus('');
+            this.clearPoster();
         }
 
-        this.wsState = WebSocket.CLOSED;
-        if (this.ws) {
-            this.ws.close();
-            this.ws = null;
-        }
-
-        this.pcState = WebSocket.CLOSED;
-        if (this.pc) {
-            if (this.keepFrameOnDisconnect) this.capturePoster();
-            this.stopTracks(this.pc.getSenders().map((sender) => sender.track));
-            this.stopTracks(this.pc.getReceivers().map((receiver) => receiver.track));
-            this.pc.close();
-            this.pc = null;
-        }
-        this.stopTracks(this.localMicrophoneTracks);
-        this.localMicrophoneTracks = [];
-        this.stopStreamTracks(this.pendingVideo?.srcObject);
-        if (this.pendingVideo) this.pendingVideo.srcObject = null;
+        this.ws = null;
+        this.pc = null;
         this.pendingVideo = null;
-        this.stopStreamTracks(this.video?.srcObject);
-        if (!this.video) return;
+        this.wsState = WebSocket.CLOSED;
+        this.pcState = WebSocket.CLOSED;
+        ws?.close();
 
-        this.video.removeAttribute('src');
-        this.video.srcObject = null;
-        if (fullDisconnect) this.clearPoster();
+        const tracks = new Set([
+            ...this.localMicrophoneTracks,
+            ...(pc?.getSenders().map((sender) => sender.track) ?? []),
+            ...(pc?.getReceivers().map((receiver) => receiver.track) ?? []),
+            ...(pendingVideo?.srcObject?.getTracks?.() ?? []),
+            ...(video?.srcObject?.getTracks?.() ?? []),
+        ]);
+        this.localMicrophoneTracks = [];
+        this.stopTracks(tracks);
+        pc?.close();
+        if (pendingVideo) pendingVideo.srcObject = null;
+        if (video) {
+            video.removeAttribute('src');
+            video.srcObject = null;
+        }
     }
 
     stopStreamTracks(stream) {
@@ -510,34 +466,23 @@ export class IntercomStream extends VideoRTC {
         }
     }
 
-    stopTracks(tracks = []) {
-        tracks.filter(Boolean).forEach((track) => {
+    stopTracks(tracks) {
+        for (const track of tracks) {
+            if (!track) continue;
             try {
                 track.stop();
             } catch (err) {
                 console.debug(err);
             }
-        });
+        }
     }
 
     toggleTalk() {
-        const button = this.$('.talk');
-        if (!this.talkButton.enabled || button.disabled) return;
+        if (!this.talkButton.enabled || this.$('.talk').disabled) return;
+        if (!this.talking && !this.shouldStream()) return;
 
-        const nextTalking = !this.talking;
-        if (nextTalking) {
-            this.setTalking(true);
-            this.setTalkBusy(true, this.talkButton.starting_status);
-            if (!this.shouldStream()) {
-                this.setTalking(false);
-                this.setTalkBusy(false);
-                return;
-            }
-            void this.stopAudioPlayers();
-        } else {
-            this.setTalking(false);
-        }
-
+        this.setTalking(!this.talking);
+        if (this.talking) void this.stopAudioPlayers();
         this.reconnectKeepingFrame(
             this.talking ? this.talkButton.starting_status : this.talkButton.ending_status,
         );
@@ -595,14 +540,7 @@ export class IntercomStream extends VideoRTC {
     }
 
     hasLiveMicrophoneTrack() {
-        return this.liveMicrophoneTracks().length > 0;
-    }
-
-    liveMicrophoneTracks() {
-        this.localMicrophoneTracks = this.localMicrophoneTracks.filter(
-            (track) => track.readyState === 'live',
-        );
-        return this.localMicrophoneTracks;
+        return this.localMicrophoneTracks.some((track) => track.readyState === 'live');
     }
 
     onMicrophoneEnded(track) {
@@ -627,11 +565,6 @@ export class IntercomStream extends VideoRTC {
         }
     }
 
-    streamErrorStatus(value) {
-        if (!value) return 'Stream error';
-        return 'Unable to connect to the camera';
-    }
-
     reconnectKeepingFrame(status, talkBusy = true) {
         if (talkBusy) {
             this.setTalkBusy(true, status);
@@ -641,9 +574,7 @@ export class IntercomStream extends VideoRTC {
         this.clearReconnectTimers();
         this.pendingConnectStatus = status;
 
-        this.keepFrameOnDisconnect = true;
-        this.ondisconnect();
-        this.keepFrameOnDisconnect = false;
+        this.ondisconnect(true);
 
         this.onconnect();
     }
@@ -673,32 +604,21 @@ export class IntercomStream extends VideoRTC {
     }
 
     capturePoster() {
-        if (!this.video || !this.video.videoWidth || !this.video.videoHeight) return;
+        if (!this.video?.videoWidth || !this.video.videoHeight) return;
 
         const generation = ++this.posterGeneration;
         this.posterCapturePending = true;
-        try {
-            const canvas = document.createElement('canvas');
-            const scale = Math.min(1, 1280 / this.video.videoWidth, 720 / this.video.videoHeight);
-            canvas.width = Math.max(1, Math.round(this.video.videoWidth * scale));
-            canvas.height = Math.max(1, Math.round(this.video.videoHeight * scale));
-            canvas.getContext('2d').drawImage(this.video, 0, 0, canvas.width, canvas.height);
-            canvas.toBlob(
-                (blob) => {
-                    if (generation !== this.posterGeneration) return;
-                    this.posterCapturePending = false;
-                    if (!blob || !this.isConnected) return;
-                    if (this.posterURL) URL.revokeObjectURL(this.posterURL);
-                    this.posterURL = URL.createObjectURL(blob);
-                    this.video.poster = this.posterURL;
-                },
-                'image/jpeg',
-                0.82,
-            );
-        } catch (err) {
+        encodeFrame(this.video, 1280, 720, 0.82, (blob) => {
+            if (generation !== this.posterGeneration) return;
             this.posterCapturePending = false;
-            console.debug(err);
-        }
+            if (blob && this.isConnected) this.setPoster(blob);
+        });
+    }
+
+    setPoster(blob) {
+        if (this.posterURL) URL.revokeObjectURL(this.posterURL);
+        this.posterURL = URL.createObjectURL(blob);
+        this.video.poster = this.posterURL;
     }
 
     clearPoster() {
@@ -804,5 +724,19 @@ export class IntercomStream extends VideoRTC {
         this.ondisconnect();
         this.showStatus('Connection error', 3200);
         this.scheduleReconnect();
+    }
+}
+
+function encodeFrame(video, maxWidth, maxHeight, quality, onBlob) {
+    try {
+        const canvas = document.createElement('canvas');
+        const scale = Math.min(1, maxWidth / video.videoWidth, maxHeight / video.videoHeight);
+        canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+        canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+        canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(onBlob, 'image/jpeg', quality);
+    } catch (err) {
+        console.debug(err);
+        onBlob(null);
     }
 }

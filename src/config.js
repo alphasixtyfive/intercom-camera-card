@@ -41,65 +41,75 @@ export function normalizeConfig(value) {
         for (const [key, item] of Object.entries(config.talk)) {
             if (key === 'enabled' && typeof item !== 'boolean')
                 throw new Error('talk.enabled must be true or false.');
-            if (key in TALK_BUTTON && key !== 'enabled' && typeof item !== 'string')
+            if (Object.hasOwn(TALK_BUTTON, key) && key !== 'enabled' && typeof item !== 'string')
                 throw new Error(`talk.${key} must be a string.`);
         }
     }
     validatePlayer(config.player, 'player');
     if (config.buttons !== undefined && !Array.isArray(config.buttons))
         throw new Error('buttons must be a list.');
-    config.buttons = (config.buttons ?? []).map((item, index) => {
-        const button = typeof item === 'string' ? { entity: item } : item;
-        const label = `buttons[${index}]`;
-        if (!isObject(button)) throw new Error(`${label} must be an entity ID or an object.`);
-        for (const key of ['entity', 'sound', 'tts', 'message', 'tts_entity']) {
-            if (button[key] !== undefined && typeof button[key] !== 'string')
-                throw new Error(`${label}.${key} must be a string.`);
-        }
-        if (button.position !== undefined && !['left', 'right'].includes(button.position))
-            throw new Error(`${label}.position must be left or right.`);
-        if (
-            button.cooldown !== undefined &&
-            (!Number.isFinite(button.cooldown) || button.cooldown < 0)
-        )
-            throw new Error(`${label}.cooldown must be a non-negative number.`);
-        if (
-            button.states !== undefined &&
-            (!isObject(button.states) ||
-                Object.values(button.states).some((state) => !isObject(state)))
-        )
-            throw new Error(`${label}.states must contain state objects.`);
-        for (const [name, settings] of [
-            [label, button],
-            ...Object.entries(button.states ?? {}).map(([state, settings]) => [
-                `${label}.states.${state}`,
-                settings,
-            ]),
-        ]) {
-            for (const key of ['disabled', 'hidden']) {
-                if (settings[key] !== undefined && typeof settings[key] !== 'boolean')
-                    throw new Error(`${name}.${key} must be true or false.`);
-            }
-            for (const key of [
-                'title',
-                'icon',
-                'color',
-                'background',
-                'hover_background',
-                'border',
-                'success_status',
-            ]) {
-                if (settings[key] !== undefined && typeof settings[key] !== 'string')
-                    throw new Error(`${name}.${key} must be a string.`);
-            }
-            if (settings.tap_action !== undefined && !isObject(settings.tap_action))
-                throw new Error(`${name}.tap_action must be an object.`);
-        }
-        validatePlayer(button.player, `${label}.player`);
-        return button;
-    });
+    config.buttons = (config.buttons ?? []).map(normalizeButton);
     config.mobile_pan = config.mobile_pan !== false && config.pan !== false;
     return config;
+}
+
+function normalizeButton(item, index) {
+    const button = typeof item === 'string' ? { entity: item } : item;
+    const label = `buttons[${index}]`;
+    if (!isObject(button)) throw new Error(`${label} must be an entity ID or an object.`);
+    for (const key of ['entity', 'sound', 'tts', 'message', 'tts_entity']) {
+        if (button[key] !== undefined && typeof button[key] !== 'string') {
+            throw new Error(`${label}.${key} must be a string.`);
+        }
+    }
+    if (button.position !== undefined && !['left', 'right'].includes(button.position)) {
+        throw new Error(`${label}.position must be left or right.`);
+    }
+    if (
+        button.cooldown !== undefined &&
+        (!Number.isFinite(button.cooldown) || button.cooldown < 0)
+    ) {
+        throw new Error(`${label}.cooldown must be a non-negative number.`);
+    }
+
+    validateButtonState(button, label);
+    if (button.states !== undefined) {
+        if (
+            !isObject(button.states) ||
+            Object.values(button.states).some((state) => !isObject(state))
+        ) {
+            throw new Error(`${label}.states must contain state objects.`);
+        }
+        for (const [state, settings] of Object.entries(button.states)) {
+            validateButtonState(settings, `${label}.states.${state}`);
+        }
+    }
+    validatePlayer(button.player, `${label}.player`);
+    return button;
+}
+
+function validateButtonState(settings, label) {
+    for (const key of ['disabled', 'hidden']) {
+        if (settings[key] !== undefined && typeof settings[key] !== 'boolean') {
+            throw new Error(`${label}.${key} must be true or false.`);
+        }
+    }
+    for (const key of [
+        'title',
+        'icon',
+        'color',
+        'background',
+        'hover_background',
+        'border',
+        'success_status',
+    ]) {
+        if (settings[key] !== undefined && typeof settings[key] !== 'string') {
+            throw new Error(`${label}.${key} must be a string.`);
+        }
+    }
+    if (settings.tap_action !== undefined && !isObject(settings.tap_action)) {
+        throw new Error(`${label}.tap_action must be an object.`);
+    }
 }
 
 function validatePlayer(value, label) {
@@ -128,39 +138,38 @@ export function talkSettings(config) {
 }
 
 export function getConfigForm() {
+    const textFields = {
+        stream: 'go2rtc stream',
+        alternate_stream: 'Alternate stream',
+        primary_label: 'Primary label',
+        alternate_label: 'Alternate label',
+        server: 'go2rtc server',
+    };
+    const labels = {
+        ...textFields,
+        poster_entity: 'Loading image camera',
+        player: 'Audio players',
+        tts_entity: 'Text-to-speech provider',
+        talk: 'Talk button',
+        mobile_pan: 'Drag to pan on mobile',
+    };
+    const helpers = {
+        entity: 'Choose a camera entity, or leave this empty and enter a go2rtc stream below.',
+        poster_entity: 'Optional still image shown while a go2rtc stream connects.',
+        talk: 'Enabled by default. Configure action buttons and custom talk labels in YAML.',
+    };
     return {
         schema: [
             { name: 'entity', selector: { entity: { domain: 'camera' } } },
             { name: 'poster_entity', selector: { entity: { domain: 'camera' } } },
-            ...['stream', 'alternate_stream', 'primary_label', 'alternate_label', 'server'].map(
-                (name) => ({ name, selector: { text: {} } }),
-            ),
+            ...Object.keys(textFields).map((name) => ({ name, selector: { text: {} } })),
             { name: 'player', selector: { entity: { domain: 'media_player', multiple: true } } },
             { name: 'tts_entity', selector: { entity: { domain: 'tts' } } },
             { name: 'talk', selector: { boolean: {} } },
             { name: 'mobile_pan', selector: { boolean: {} } },
         ],
-        computeLabel: ({ name }) =>
-            ({
-                stream: 'go2rtc stream',
-                poster_entity: 'Loading image camera',
-                alternate_stream: 'Alternate stream',
-                primary_label: 'Primary label',
-                alternate_label: 'Alternate label',
-                server: 'go2rtc server',
-                player: 'Audio players',
-                tts_entity: 'Text-to-speech provider',
-                talk: 'Talk button',
-                mobile_pan: 'Drag to pan on mobile',
-            })[name],
-        computeHelper: ({ name }) =>
-            name === 'entity'
-                ? 'Choose a camera entity, or leave this empty and enter a go2rtc stream below.'
-                : name === 'poster_entity'
-                  ? 'Optional still image shown while a go2rtc stream connects.'
-                  : name === 'talk'
-                    ? 'Enabled by default. Configure action buttons and custom talk labels in YAML.'
-                    : undefined,
+        computeLabel: ({ name }) => labels[name],
+        computeHelper: ({ name }) => helpers[name],
         assertConfig: (config) => {
             if (isObject(config.talk) || typeof config.player === 'string') {
                 throw new Error(

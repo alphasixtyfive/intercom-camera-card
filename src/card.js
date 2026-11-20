@@ -20,13 +20,14 @@ export class IntercomCameraCard extends IntercomStream {
 
     setConfig(config) {
         const nextConfig = normalizeConfig(config);
+        const nextTalkButton = talkSettings(nextConfig);
         const sourceChanged = connectionKey(this.config) !== connectionKey(nextConfig);
-        const stopTalking = this.talking && !talkSettings(nextConfig).enabled;
+        const stopTalking = this.talking && !nextTalkButton.enabled;
         if (sourceChanged || stopTalking) this.disconnectImmediately();
         this.config = nextConfig;
         if (sourceChanged) this.streamVariant = this.loadStreamVariant();
         this.pan.configure();
-        this.talkButton = talkSettings(nextConfig);
+        this.talkButton = nextTalkButton;
         this.media = this.mediaForTalkState();
 
         this.buttons.configure();
@@ -40,7 +41,7 @@ export class IntercomCameraCard extends IntercomStream {
     set hass(hass) {
         const previous = this._hass;
         this._hass = hass;
-        if (this.shadowRoot) this.updateFallbackImage();
+        if (this.fallbackImage) this.updateFallbackImage();
         if (this.isConnected) this.buttons.updateStatefulButtons(previous);
         if (!previous && this.config && !this.isConnected) {
             this.getSignedPath().catch(() => {});
@@ -81,10 +82,11 @@ export class IntercomCameraCard extends IntercomStream {
     }
 
     connectedCallback() {
+        const initialized = Boolean(this.video);
         super.connectedCallback();
         this.installVisibilityHandlers();
         this.pan.installPanResizeObserver();
-        this.buttons.updateStatefulButtons();
+        if (initialized) this.buttons.updateStatefulButtons();
     }
 
     disconnectedCallback() {
@@ -108,6 +110,7 @@ export class IntercomCameraCard extends IntercomStream {
 
         this.$ = (selectors) => this.shadowRoot.querySelector(selectors);
         const image = this.$('.fallback-image');
+        this.fallbackImage = image;
         image.addEventListener('load', () => {
             image.hidden = false;
         });
@@ -120,7 +123,6 @@ export class IntercomCameraCard extends IntercomStream {
         this.bindControls();
         this.pan.bindPanControls();
         this.bindVideoLifecycle();
-        this.installVisibilityHandlers();
     }
 
     bindControls() {
@@ -157,10 +159,10 @@ export class IntercomCameraCard extends IntercomStream {
 
         this.video.addEventListener('playing', () => {
             this.onVideoPlaying();
+            this.pan.updatePanAvailability();
         });
         this.video.addEventListener('loadedmetadata', () => this.pan.updatePanAvailability());
         this.video.addEventListener('loadeddata', () => this.pan.updatePanAvailability());
-        this.video.addEventListener('playing', () => this.pan.updatePanAvailability());
     }
 
     applyConfigToDom() {
@@ -169,21 +171,21 @@ export class IntercomCameraCard extends IntercomStream {
         this.updateFallbackImage();
         this.buttons.renderActionButtons();
         this.updateStreamToggle();
+        this.applyTalkButtonStyle();
         this.updateTalkButton();
-        this.buttons.updateStatefulButtons();
         this.pan.applyVideoPan();
         if (!this.hasVideoSource()) this.showStatus('Camera source unavailable');
     }
 
     updateFallbackImage() {
-        const image = this.$('.fallback-image');
+        const image = this.fallbackImage;
         const entity = this.config?.poster_entity || this.config?.entity;
         const picture = this.hass?.states?.[entity]?.attributes?.entity_picture;
-        const url = picture ? this.hass.hassUrl(picture) : '';
+        const url = picture ? this.hass.hassUrl(picture) || null : null;
         if (image.getAttribute('src') === url) return;
         image.hidden = true;
-        if (url) image.src = url;
-        else image.removeAttribute('src');
+        if (url === null) image.removeAttribute('src');
+        else image.src = url;
     }
 
     updateStreamToggle() {
@@ -225,13 +227,8 @@ export class IntercomCameraCard extends IntercomStream {
         button.hidden = !this.talkButton.enabled;
         if (!this.talkButton.enabled) return;
 
-        const icon = button.querySelector('ha-icon') || document.createElement('ha-icon');
-        if (!icon.parentElement) button.appendChild(icon);
-        icon.setAttribute('aria-hidden', 'true');
-
         const title = this.talking ? this.talkButton.active_title : this.talkButton.title;
         const iconName = this.talking ? this.talkButton.active_icon : this.talkButton.icon;
-        const color = this.talking ? this.talkButton.active_color : this.talkButton.color;
         const sourceUnavailable = !this.hasVideoSource();
         const buttonTitle = sourceUnavailable ? 'Camera source unavailable' : title;
 
@@ -239,8 +236,12 @@ export class IntercomCameraCard extends IntercomStream {
         button.disabled = sourceUnavailable || (button.classList.contains('busy') && !this.talking);
         button.title = buttonTitle;
         button.setAttribute('aria-label', buttonTitle);
-        icon.setAttribute('icon', iconName);
-        button.style.setProperty('--button-color', color);
+        button.firstElementChild.setAttribute('icon', iconName);
+    }
+
+    applyTalkButtonStyle() {
+        const button = this.$('.talk');
+        button.style.setProperty('--button-color', this.talkButton.color);
         button.style.setProperty('--talk-active-color', this.talkButton.active_color);
         button.style.setProperty('--talk-busy-color', this.talkButton.busy_color);
 

@@ -11,8 +11,7 @@ export class IntercomButtons {
         this.card = card;
         this.leftButtons = [];
         this.rightButtons = [];
-        this.pendingActionIds = new Set();
-        this.cooldowns = new Set();
+        this.cooldowns = new Map();
         this.elements = new Map();
     }
 
@@ -28,33 +27,25 @@ export class IntercomButtons {
 
     configure() {
         this.dispose();
-        this.leftButtons = this.normalizeButtons('left');
-        this.rightButtons = this.normalizeButtons('right');
-        for (const button of [...this.leftButtons, ...this.rightButtons]) {
+        this.leftButtons = [];
+        this.rightButtons = [];
+        for (const config of this.config.buttons) {
+            const position = config.position || 'left';
+            const group = position === 'right' ? this.rightButtons : this.leftButtons;
+            const button = this.normalizeButton(config, `${position}-${group.length}`);
             button.dependencies = [
                 ...new Set([button.entity, ...this.buttonPlayers(button)]),
             ].filter(Boolean);
+            group.push(button);
         }
     }
 
     dispose() {
-        for (const timer of this.cooldowns) clearTimeout(timer);
+        for (const timer of this.cooldowns.values()) clearTimeout(timer);
         this.cooldowns.clear();
-        this.pendingActionIds.clear();
     }
 
-    normalizeButtons(position) {
-        if (Array.isArray(this.config.buttons)) {
-            return this.config.buttons
-                .filter((button) => (button.position || 'left') === position)
-                .map((button, index) => this.normalizeButton(button, `${position}-${index}`));
-        }
-
-        return [];
-    }
-
-    normalizeButton(value, fallbackId) {
-        const button = typeof value === 'string' ? { entity: value } : { ...(value || {}) };
+    normalizeButton(button, id) {
         const defaults = this.buttonDefaults(button);
         const merged = {
             ...defaults,
@@ -76,7 +67,7 @@ export class IntercomButtons {
         );
 
         return {
-            id: fallbackId,
+            id,
             entity: button.entity || defaults.entity,
             title,
             icon: merged.icon || 'mdi:circle',
@@ -332,81 +323,62 @@ export class IntercomButtons {
         );
     }
 
-    createActionButton(buttonConfig) {
+    createActionButton(config) {
         const button = document.createElement('button');
-        this.elements.set(buttonConfig.id, button);
+        this.elements.set(config.id, { button, config });
         button.type = 'button';
-        button.dataset.buttonId = buttonConfig.id;
-        button.title = buttonConfig.title;
-        button.setAttribute('aria-label', buttonConfig.title || buttonConfig.id);
+        button.dataset.buttonId = config.id;
 
         const icon = document.createElement('ha-icon');
         icon.setAttribute('aria-hidden', 'true');
-        icon.setAttribute('icon', buttonConfig.icon);
+        icon.setAttribute('icon', config.icon);
         button.appendChild(icon);
-
-        this.applyStateToButton(button, buttonConfig);
-        this.bindActionButton(button, buttonConfig);
+        this.applyStateToButton(button, config);
+        button.addEventListener('click', (event) => {
+            event.preventDefault();
+            if (!button.disabled) this.dispatchButtonAction(button, config);
+        });
         return button;
     }
 
-    bindActionButton(button, buttonConfig) {
-        button.addEventListener('click', (ev) => {
-            ev.preventDefault();
-            if (button.disabled) return;
-            this.dispatchButtonAction(button, buttonConfig);
-        });
-    }
-
     updateStatefulButtons(previousHass) {
-        if (!this.card.shadowRoot) return;
-
-        [...this.leftButtons, ...this.rightButtons].forEach((buttonConfig) => {
+        const previous = previousHass?.states;
+        const current = this.hass?.states;
+        for (const { button, config } of this.elements.values()) {
             if (
                 previousHass &&
-                buttonConfig.dependencies.every(
-                    (id) => previousHass.states?.[id] === this.hass?.states?.[id],
-                )
-            )
-                return;
-            const button = this.elements.get(buttonConfig.id);
-            if (button) this.applyStateToButton(button, buttonConfig);
-        });
+                config.dependencies.every((id) => previous?.[id] === current?.[id])
+            ) {
+                continue;
+            }
+            this.applyStateToButton(button, config);
+        }
     }
 
     applyStateToButton(button, config) {
-        const state = this.entityStateForButton(config);
-        const stateConfig = this.effectiveStateConfigForButton(config, state);
-        const visual = this.buttonVisualConfig(config, stateConfig);
-
-        const icon = button.querySelector('ha-icon');
-        if (visual.icon && icon) icon.setAttribute('icon', visual.icon);
-        button.title = visual.title || config.id;
-        button.setAttribute('aria-label', visual.title || config.id);
-        this.setOptionalVar(button, '--button-color', visual.color);
-        this.setOptionalVar(button, '--button-background', visual.background);
-        this.setOptionalVar(button, '--button-hover-background', visual.hover_background);
-        this.setOptionalVar(button, '--button-border', visual.border);
-
-        button.hidden = this.buttonHidden(stateConfig);
-        this.syncButtonDisabled(button, config, state, stateConfig);
-    }
-
-    buttonVisualConfig(config, stateConfig = {}) {
-        return {
-            title: stateConfig.title ?? config.title,
-            icon: stateConfig.icon ?? config.icon,
-            color: stateConfig.color ?? config.color,
-            background: stateConfig.background ?? config.background,
-            hover_background: stateConfig.hover_background ?? config.hover_background,
-            border: stateConfig.border ?? config.border,
-        };
-    }
-
-    entityStateForButton(config) {
-        if (!config.entity) return undefined;
-        if (!this.hass?.states) return 'unavailable';
-        return this.hass.states[config.entity]?.state || 'unavailable';
+        const { overrides, hidden, disabled, audioLocked } = this.resolveButton(config);
+        const icon = button.firstElementChild;
+        const iconName = overrides.icon ?? config.icon;
+        if (iconName && icon.getAttribute('icon') !== iconName) icon.setAttribute('icon', iconName);
+        const title = audioLocked
+            ? 'Hang up before playing audio'
+            : (overrides.title ?? config.title);
+        button.title = title || config.id;
+        button.setAttribute('aria-label', button.title);
+        this.setOptionalVar(button, '--button-color', overrides.color ?? config.color);
+        this.setOptionalVar(
+            button,
+            '--button-background',
+            overrides.background ?? config.background,
+        );
+        this.setOptionalVar(
+            button,
+            '--button-hover-background',
+            overrides.hover_background ?? config.hover_background,
+        );
+        this.setOptionalVar(button, '--button-border', overrides.border ?? config.border);
+        button.hidden = hidden;
+        button.disabled = disabled;
     }
 
     stateConfigForButton(config, state) {
@@ -418,24 +390,35 @@ export class IntercomButtons {
                 this.unavailableButtonConfig(config, state)
             );
         }
-        if (!config.states) return {};
         return config.states[state] || config.states.default || {};
     }
 
-    effectiveStateConfigForButton(config, state = this.entityStateForButton(config)) {
+    resolveButton(config) {
+        const state = config.entity
+            ? this.hass?.states?.[config.entity]?.state || 'unavailable'
+            : undefined;
         const stateConfig = this.stateConfigForButton(config, state);
+        const action = stateConfig.tap_action || config.tap_action;
+        const audio = config.audio || this.isAudioAction(action);
+        const overrides = audio
+            ? { ...stateConfig, ...this.audioPlayerAvailabilityConfig(config, action) }
+            : stateConfig;
+        const audioLocked = this.talking && audio;
         return {
-            disabled: config.disabled,
-            hidden: config.hidden,
-            ...stateConfig,
-            ...this.audioPlayerAvailabilityConfig(config, stateConfig),
+            overrides,
+            action,
+            audioLocked,
+            hidden: overrides.hidden ?? config.hidden,
+            disabled:
+                (overrides.disabled ?? config.disabled) ||
+                this.cooldowns.has(config.id) ||
+                audioLocked ||
+                !action ||
+                action.action === 'none',
         };
     }
 
-    audioPlayerAvailabilityConfig(config, stateConfig = {}) {
-        const action = stateConfig.tap_action || config.tap_action;
-        if (!config.audio && !this.isAudioAction(action)) return {};
-
+    audioPlayerAvailabilityConfig(config, action) {
         const target = this.playerFromAction(action) || config.player;
         const players = this.asArray(target).filter(
             (player) => this.entityDomain(player) === 'media_player',
@@ -447,15 +430,6 @@ export class IntercomButtons {
                 'Audio target unavailable',
                 'mdi:speaker-off',
             );
-
-        if (!this.hass?.states) {
-            return this.unavailableButtonConfig(
-                config,
-                'unavailable',
-                `${config.title || 'Audio'} unavailable`,
-                'mdi:speaker-off',
-            );
-        }
 
         const unavailablePlayer = players.find((player) => !this.entityAvailable(player));
         if (!unavailablePlayer) return {};
@@ -486,28 +460,6 @@ export class IntercomButtons {
     entityAvailable(entityId) {
         const state = this.hass?.states?.[entityId]?.state;
         return Boolean(state) && !this.isUnavailableState(state);
-    }
-
-    buttonHidden(stateConfig) {
-        return Boolean(stateConfig.hidden);
-    }
-
-    syncButtonDisabled(button, config, state = this.entityStateForButton(config), stateConfig) {
-        const currentStateConfig = stateConfig || this.effectiveStateConfigForButton(config, state);
-        const stateDisabled = Boolean(currentStateConfig.disabled);
-        const actionConfig = currentStateConfig.tap_action || config.tap_action;
-        const audioDisabled = this.talking && (config.audio || this.isAudioAction(actionConfig));
-        const actionDisabled = !actionConfig || actionConfig.action === 'none';
-
-        button.disabled =
-            this.pendingActionIds.has(config.id) ||
-            stateDisabled ||
-            audioDisabled ||
-            actionDisabled;
-        if (audioDisabled) {
-            button.title = 'Hang up before playing audio';
-            button.setAttribute('aria-label', button.title);
-        }
     }
 
     setOptionalVar(element, name, value) {
@@ -550,57 +502,35 @@ export class IntercomButtons {
         ];
     }
 
-    dispatchButtonAction(button, buttonConfig) {
-        if (!button.isConnected || !this.card.shadowRoot?.contains(button)) return;
-        if (this.pendingActionIds.has(buttonConfig.id)) return;
+    dispatchButtonAction(button, config) {
+        if (!button.isConnected || this.elements.get(config.id)?.button !== button) return;
+        const { overrides, action, hidden, disabled } = this.resolveButton(config);
+        if (hidden || disabled) return;
 
-        const state = this.entityStateForButton(buttonConfig);
-        const stateConfig = this.effectiveStateConfigForButton(buttonConfig, state);
-        if (this.buttonHidden(stateConfig)) return;
-        if (stateConfig.disabled) return;
-
-        const actionConfig = stateConfig.tap_action || buttonConfig.tap_action;
-        if (!actionConfig || actionConfig.action === 'none') return;
-        if (this.talking && (buttonConfig.audio || this.isAudioAction(actionConfig))) return;
-
-        this.pendingActionIds.add(buttonConfig.id);
         button.disabled = true;
         const timer = setTimeout(() => {
-            this.cooldowns.delete(timer);
-            this.pendingActionIds.delete(buttonConfig.id);
-            this.updateStatefulButtons();
-        }, buttonConfig.cooldown);
-        this.cooldowns.add(timer);
+            this.cooldowns.delete(config.id);
+            this.applyStateToButton(button, config);
+        }, config.cooldown);
+        this.cooldowns.set(config.id, timer);
 
-        if (actionConfig.action === 'fire-dom-event') {
-            this.fireDomEvent(actionConfig, buttonConfig);
+        if (action.action === 'fire-dom-event') {
+            this.fireDomEvent(action, config);
         } else {
-            this.fireHassAction(buttonConfig, stateConfig);
+            this.card.dispatchEvent(
+                new CustomEvent('hass-action', {
+                    bubbles: true,
+                    composed: true,
+                    detail: {
+                        action: 'tap',
+                        config: { entity: config.entity, tap_action: action },
+                    },
+                }),
+            );
         }
 
-        const successStatus = stateConfig.success_status ?? buttonConfig.success_status;
-        if (successStatus) {
-            this.card.showStatus(successStatus, 1200);
-        }
-    }
-
-    fireHassAction(buttonConfig, stateConfig) {
-        const event = new CustomEvent('hass-action', {
-            bubbles: true,
-            composed: true,
-            detail: {
-                action: 'tap',
-                config: this.actionHandlerConfig(buttonConfig, stateConfig),
-            },
-        });
-        this.card.dispatchEvent(event);
-    }
-
-    actionHandlerConfig(buttonConfig, stateConfig = {}) {
-        return {
-            entity: buttonConfig.entity,
-            tap_action: stateConfig.tap_action || buttonConfig.tap_action,
-        };
+        const status = overrides.success_status ?? config.success_status;
+        if (status) this.card.showStatus(status, 1200);
     }
 
     fireDomEvent(actionConfig, buttonConfig) {

@@ -1,10 +1,10 @@
 import { PAN_STORAGE_PREFIX, DEFAULT_VIDEO_PAN_X } from './defaults.js';
+import { readPreference, writePreference } from './preferences.js';
 
 export class VideoPan {
     constructor(card) {
         this.card = card;
         this.videoPanX = DEFAULT_VIDEO_PAN_X;
-        this.mobilePanEnabled = true;
         this.handlePanPointerDown = (event) => this.onPanPointerDown(event);
         this.handlePanPointerMove = (event) => this.onPanPointerMove(event);
         this.handlePanPointerEnd = (event) => this.onPanPointerEnd(event);
@@ -19,30 +19,26 @@ export class VideoPan {
     }
 
     configure() {
-        this.mobilePanEnabled = this.config.mobile_pan;
         this.videoPanX = this.loadVideoPanX();
     }
 
     bindPanControls() {
+        this.stage = this.card.$('.stage');
         const wrap = this.card.$('.video-wrap');
+        this.wrap = wrap;
         wrap.addEventListener('pointerdown', this.handlePanPointerDown, { passive: false });
         wrap.addEventListener('pointermove', this.handlePanPointerMove, { passive: false });
         wrap.addEventListener('pointerup', this.handlePanPointerEnd, { passive: false });
         wrap.addEventListener('pointercancel', this.handlePanPointerEnd, { passive: false });
         wrap.addEventListener('lostpointercapture', this.handlePanPointerEnd, { passive: false });
-
-        this.installPanResizeObserver();
     }
 
     installPanResizeObserver() {
-        if (!this.card.shadowRoot || this.resizeObserver || this.panResizeHandlerInstalled) return;
-
-        const wrap = this.card.$('.video-wrap');
-        if (!wrap) return;
+        if (!this.wrap || this.resizeObserver || this.panResizeHandlerInstalled) return;
 
         if ('ResizeObserver' in window) {
             this.resizeObserver = new ResizeObserver(this.handleResize);
-            this.resizeObserver.observe(wrap);
+            this.resizeObserver.observe(this.wrap);
         } else {
             window.addEventListener('resize', this.handleResize, { passive: true });
             this.panResizeHandlerInstalled = true;
@@ -59,7 +55,7 @@ export class VideoPan {
             this.panResizeHandlerInstalled = false;
         }
         this.panGesture = null;
-        this.card.$?.('.stage')?.classList.remove('panning');
+        this.stage?.classList.remove('panning');
     }
 
     applyVideoPan() {
@@ -67,26 +63,17 @@ export class VideoPan {
         this.updatePanAvailability();
     }
 
-    canPanVideo() {
-        return (
-            this.mobilePanEnabled &&
-            this.card.hasVideoSource() &&
-            this.isMobilePanContext() &&
-            this.videoHorizontalOverflow() > 1
-        );
-    }
-
-    isMobilePanContext() {
-        return window.matchMedia?.('(max-width: 680px), (pointer: coarse)')?.matches ?? false;
+    panOverflow() {
+        if (!this.config?.mobile_pan || !this.card.hasVideoSource()) return 0;
+        if (!window.matchMedia?.('(max-width: 680px), (pointer: coarse)')?.matches) return 0;
+        return this.videoHorizontalOverflow();
     }
 
     videoHorizontalOverflow() {
-        if (!this.video?.videoWidth || !this.video?.videoHeight || !this.card.shadowRoot) return 0;
+        if (!this.video?.videoWidth || !this.video.videoHeight || !this.wrap) return 0;
         if (getComputedStyle(this.video).objectFit !== 'cover') return 0;
 
-        const wrap = this.card.$('.video-wrap');
-        const width = wrap?.clientWidth || 0;
-        const height = wrap?.clientHeight || 0;
+        const { clientWidth: width, clientHeight: height } = this.wrap;
         if (!width || !height) return 0;
 
         const scale = Math.max(width / this.video.videoWidth, height / this.video.videoHeight);
@@ -94,25 +81,24 @@ export class VideoPan {
     }
 
     updatePanAvailability() {
-        if (!this.card.shadowRoot) return;
-        this.card.$('.stage')?.classList.toggle('pannable', this.canPanVideo());
+        this.stage?.classList.toggle('pannable', this.panOverflow() > 1);
     }
 
     onPanPointerDown(ev) {
-        if (!ev.isPrimary || ev.button !== 0 || !this.canPanVideo()) return;
-
-        const wrap = this.card.$('.video-wrap');
+        if (!ev.isPrimary || ev.button !== 0) return;
+        const overflow = this.panOverflow();
+        if (overflow <= 1) return;
         this.panGesture = {
             pointerId: ev.pointerId,
             startX: ev.clientX,
             startY: ev.clientY,
             startPanX: this.videoPanX,
             active: false,
-            overflow: this.videoHorizontalOverflow(),
+            overflow,
         };
 
         try {
-            wrap.setPointerCapture(ev.pointerId);
+            this.wrap.setPointerCapture(ev.pointerId);
         } catch (err) {
             console.debug(err);
         }
@@ -129,7 +115,7 @@ export class VideoPan {
             if (Math.abs(dx) < 8) return;
             if (Math.abs(dx) < Math.abs(dy) * 1.15) return;
             gesture.active = true;
-            this.card.$('.stage')?.classList.add('panning');
+            this.stage?.classList.add('panning');
         }
 
         ev.preventDefault();
@@ -138,7 +124,7 @@ export class VideoPan {
         const overflow = gesture.overflow;
         if (!overflow) return;
 
-        this.videoPanX = this.clamp(gesture.startPanX - (dx / overflow) * 100, 0, 100);
+        this.videoPanX = clampPan(gesture.startPanX - (dx / overflow) * 100);
         this.card.style.setProperty('--intercom-video-pan-x', `${this.videoPanX}%`);
     }
 
@@ -152,10 +138,10 @@ export class VideoPan {
             this.saveVideoPanX();
         }
 
-        this.card.$('.stage')?.classList.remove('panning');
+        this.stage?.classList.remove('panning');
         this.panGesture = null;
-        const wrap = this.card.$('.video-wrap');
-        if (wrap.hasPointerCapture?.(ev.pointerId)) wrap.releasePointerCapture(ev.pointerId);
+        if (this.wrap.hasPointerCapture?.(ev.pointerId))
+            this.wrap.releasePointerCapture(ev.pointerId);
     }
 
     panPreferenceKey() {
@@ -166,32 +152,16 @@ export class VideoPan {
     }
 
     loadVideoPanX() {
-        const key = this.panPreferenceKey();
-        if (!key) return DEFAULT_VIDEO_PAN_X;
-
-        try {
-            const value = localStorage.getItem(key);
-            if (value === null || value.trim() === '') return DEFAULT_VIDEO_PAN_X;
-            const stored = Number(value);
-            return Number.isFinite(stored) ? this.clamp(stored, 0, 100) : DEFAULT_VIDEO_PAN_X;
-        } catch (err) {
-            console.debug(err);
-            return DEFAULT_VIDEO_PAN_X;
-        }
+        const value = readPreference(this.panPreferenceKey());
+        const stored = value?.trim() ? Number(value) : NaN;
+        return Number.isFinite(stored) ? clampPan(stored) : DEFAULT_VIDEO_PAN_X;
     }
 
     saveVideoPanX() {
-        const key = this.panPreferenceKey();
-        if (!key) return;
-
-        try {
-            localStorage.setItem(key, String(Math.round(this.videoPanX)));
-        } catch (err) {
-            console.debug(err);
-        }
+        writePreference(this.panPreferenceKey(), String(Math.round(this.videoPanX)));
     }
+}
 
-    clamp(value, min, max) {
-        return Math.min(max, Math.max(min, value));
-    }
+function clampPan(value) {
+    return Math.min(100, Math.max(0, value));
 }

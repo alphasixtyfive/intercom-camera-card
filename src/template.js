@@ -21,6 +21,11 @@ export const CARD_TEMPLATE = `
         box-shadow: none;
     }
     .stage {
+        --overlay-inset: var(--ha-space-4, 16px);
+        --overlay-radius: var(--ha-button-border-radius, var(--ha-border-radius-md, 8px));
+        --overlay-background: rgba(18, 20, 24, 0.72);
+        --overlay-border: var(--ha-border-width-sm, 1px) solid rgba(255, 255, 255, 0.16);
+        --focus-color: var(--ha-color-focus, var(--primary-color, #03a9f4));
         position: relative;
         isolation: isolate;
         width: 100%;
@@ -69,30 +74,23 @@ export const CARD_TEMPLATE = `
     }
     .top-bar {
         position: absolute;
-        inset: 16px 16px auto;
+        inset: 0;
         z-index: 2;
         display: flex;
         align-items: flex-start;
-        justify-content: flex-end;
-        gap: 12px;
+        gap: var(--ha-space-2, 8px);
+        padding: var(--overlay-inset);
         pointer-events: none;
     }
     button {
         appearance: none;
         box-sizing: border-box;
-        border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.15));
-        border-radius: var(--ha-border-radius-md, 8px);
-        color: var(--button-color, var(--primary-text-color, #fff));
-        background: var(--button-background, rgba(255, 255, 255, 0.08));
         cursor: pointer;
-        font-family: var(--ha-font-family-body, sans-serif);
+        font: inherit;
         transition: background 150ms ease, opacity 150ms ease;
     }
-    @media (hover: hover) {
-        button:hover { background: var(--button-hover-background, rgba(255, 255, 255, 0.16)); }
-    }
     button:focus-visible, video:focus-visible {
-        outline: 2px solid var(--primary-color, #03a9f4);
+        outline: 2px solid var(--focus-color);
         outline-offset: -3px;
     }
     button[hidden] { display: none; }
@@ -101,119 +99,117 @@ export const CARD_TEMPLATE = `
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        gap: 7px;
-        flex: 0 0 auto;
+        gap: var(--ha-space-2, 8px);
+        margin-inline-start: auto;
+        min-width: 44px;
         min-height: 44px;
-        padding: 0 14px;
-        border-radius: var(--ha-border-radius-pill, 999px);
+        max-width: 50%;
+        padding: 0 var(--ha-space-3, 12px);
         pointer-events: auto;
-        color: #fff;
-        background: rgba(0, 0, 0, 0.54);
-        font-size: var(--ha-font-size-s, 12px);
-        font-weight: var(--ha-font-weight-medium, 500);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
     }
-    .stream-toggle ha-icon { --mdc-icon-size: 18px; }
-    .status {
-        position: absolute;
-        top: 16px;
-        left: 16px;
-        z-index: 2;
-        max-width: min(calc(100% - 32px), 420px);
-        padding: 8px 12px;
-        border-radius: var(--ha-border-radius-pill, 999px);
+    .stream-toggle ha-icon { --mdc-icon-size: 18px; flex: none; }
+    .stream-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .stream-toggle, .status {
+        border: var(--overlay-border);
+        border-radius: var(--overlay-radius);
         color: #fff;
-        background: rgba(0, 0, 0, 0.64);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        font: var(--ha-font-weight-medium, 500) var(--ha-font-size-m, 14px)/1.3 var(--ha-font-family-body, sans-serif);
+        background: var(--overlay-background);
+        font: var(--ha-font-weight-medium, 500) var(--ha-font-size-s, 12px)/1.4 var(--ha-font-family-body, sans-serif);
+    }
+    .status {
+        box-sizing: border-box;
+        min-width: 0;
+        max-width: 420px;
+        padding: 8px 12px;
+        font-size: var(--ha-font-size-m, 14px);
         opacity: 0;
-        pointer-events: none;
         overflow-wrap: anywhere;
         transition: opacity 150ms ease;
     }
     .status.visible { opacity: 1; }
     .status.centered {
+        position: absolute;
         top: 50%;
         left: 50%;
-        max-width: min(calc(100% - 32px), 420px);
+        width: max-content;
+        max-width: min(calc(100% - 2 * var(--overlay-inset)), 420px);
         padding: 12px 18px;
         transform: translate(-50%, -50%);
         text-align: center;
         font-size: var(--ha-font-size-l, 16px);
     }
     .controls {
+        --control-size: 68px;
+        --control-icon-size: 29px;
+        --control-gap: 18px;
         position: absolute;
         left: 50%;
-        bottom: max(16px, calc(env(safe-area-inset-bottom) + 8px));
+        bottom: max(var(--ha-space-4, 16px), calc(env(safe-area-inset-bottom) + 8px));
         z-index: 2;
         display: flex;
         flex-wrap: nowrap;
         justify-content: safe center;
-        gap: 18px;
+        gap: var(--control-gap);
         box-sizing: border-box;
-        width: min(620px, calc(100% - 24px));
+        width: max-content;
+        max-width: min(620px, calc(100% - 2 * var(--overlay-inset)));
         overflow-x: auto;
         overflow-y: hidden;
-        padding: 6px 0 12px;
+        padding: 6px 4px 12px;
         overscroll-behavior-inline: contain;
         scrollbar-color: rgba(255, 255, 255, 0.45) transparent;
         scrollbar-width: thin;
         transform: translateX(-50%);
     }
+    .controls:not(:has(button:not([hidden]))) { display: none; }
     .button-group { display: contents; }
     .controls button {
-        display: flex;
-        flex: 0 0 68px;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        min-width: 0;
-        min-height: 68px;
+        --control-color: var(--button-color, #fff);
+        --control-fill: var(--button-background, var(--overlay-background));
+        --control-hover: var(--button-hover-background, var(--control-fill));
+        --control-border: var(--button-border, var(--overlay-border));
+        display: grid;
+        place-items: center;
+        flex: 0 0 var(--control-size);
+        min-height: var(--control-size);
         padding: 0;
         border: 0;
+        border-radius: var(--ha-border-radius-circle, 50%);
         background: transparent;
-        text-align: center;
     }
     @media (hover: hover) {
-        .controls button:hover { background: transparent; }
+        .stream-toggle:not(:disabled):hover { background: rgba(42, 45, 50, 0.92); }
         .controls button:not(:disabled):hover ha-icon {
-            background: var(--button-hover-background, var(--button-background, rgba(45, 45, 45, 0.84)));
+            background: var(--control-hover);
         }
     }
-    .controls button:focus-visible { outline: none; }
-    .controls button:focus-visible ha-icon {
-        outline: 2px solid var(--primary-color, #03a9f4);
-        outline-offset: 2px;
-    }
+    .controls button:focus-visible { outline-offset: 2px; }
     .controls button:not(:disabled):active ha-icon { transform: scale(0.97); }
     .controls ha-icon {
-        --mdc-icon-size: 29px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex: 0 0 auto;
+        --mdc-icon-size: var(--control-icon-size);
+        display: grid;
+        place-items: center;
         box-sizing: border-box;
-        width: min(68px, 100%);
-        height: auto;
-        aspect-ratio: 1;
-        border: var(--button-border, 1px solid rgba(255, 255, 255, 0.22));
-        border-radius: 50%;
-        color: var(--button-color, #fff);
-        background: var(--button-background, rgba(25, 25, 25, 0.72));
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.34);
-        transition: transform 160ms ease, background 160ms ease, box-shadow 160ms ease;
+        width: var(--control-size);
+        height: var(--control-size);
+        border: var(--control-border);
+        border-radius: inherit;
+        color: var(--control-color);
+        background: var(--control-fill);
+        box-shadow: inset 0 1px rgba(255, 255, 255, 0.14), 0 3px 10px rgba(0, 0, 0, 0.28);
+        transition: transform 160ms ease, background 160ms ease;
     }
-    .controls .talk.active ha-icon {
-        color: var(--talk-active-color);
-        background: var(--talk-active-background, var(--error-color, #db4437));
-        border: var(--talk-active-border, 1px solid rgba(255, 255, 255, 0.22));
+    .controls .talk.active {
+        --control-color: var(--talk-active-color);
+        --control-fill: var(--talk-active-background, var(--error-color, #db4437));
+        --control-hover: var(--control-fill);
+        --control-border: var(--talk-active-border, var(--overlay-border));
     }
-    .controls .talk.busy ha-icon {
-        color: var(--talk-busy-color);
-        background: var(--talk-busy-background, var(--warning-color, #e6a23c));
-        border: var(--talk-busy-border, 1px solid rgba(255, 255, 255, 0.22));
+    .controls .talk.busy {
+        --control-color: var(--talk-busy-color);
+        --control-fill: var(--talk-busy-background, var(--warning-color, #e6a23c));
+        --control-hover: var(--control-fill);
+        --control-border: var(--talk-busy-border, var(--overlay-border));
     }
     @media (max-width: 680px) {
         :host([panel]) ha-card {
@@ -222,19 +218,18 @@ export const CARD_TEMPLATE = `
         }
     }
     @container (max-width: 680px) {
-        .top-bar { inset: 10px 10px auto; }
-        .status { left: 10px; top: 10px; }
-        .controls { gap: 10px; width: min(340px, calc(100% - 20px)); }
-        .controls button {
-            flex-basis: 60px;
-            min-height: 60px;
+        .top-bar, .controls { --overlay-inset: var(--ha-space-2, 8px); }
+        .controls {
+            --control-size: 60px;
+            --control-icon-size: 25px;
+            --control-gap: 10px;
         }
-        .controls ha-icon { --mdc-icon-size: 25px; width: min(60px, 100%); }
     }
-    @container (max-width: 350px) {
-        .controls { gap: 8px; }
-        .controls button { flex-basis: 56px; }
-        .controls ha-icon { width: min(56px, 100%); }
+    @container (max-width: 375px) {
+        .controls {
+            --control-size: 56px;
+            --control-gap: var(--ha-space-2, 8px);
+        }
     }
     @media (prefers-reduced-motion: reduce) {
         button, .controls ha-icon, .status, video { transition: none; }
@@ -245,9 +240,9 @@ export const CARD_TEMPLATE = `
         <div class="video-wrap"><img class="fallback-image" alt="" hidden></div>
         <div class="shade"></div>
         <div class="top-bar">
+            <div class="status" role="status" aria-live="polite" aria-atomic="true"></div>
             <button class="stream-toggle" type="button" hidden><ha-icon icon="mdi:video-switch" aria-hidden="true"></ha-icon><span class="stream-label"></span></button>
         </div>
-        <div class="status" role="status" aria-live="polite" aria-atomic="true"></div>
         <div class="controls" role="group" aria-label="Intercom controls">
             <div class="button-group left-buttons"></div>
             <button class="talk" type="button"><ha-icon aria-hidden="true"></ha-icon></button>

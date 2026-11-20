@@ -184,6 +184,27 @@ test('native action events preserve confirmation and targets', () => {
     assert.equal(element.buttons.cooldowns.size, 0);
 });
 
+test('a cooldown refreshes only its shortcut and uses the latest entity state', (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const element = card({ ...config, buttons: ['light.porch', 'cover.gate'] });
+    const gate = element.$('[data-button-id="left-1"]');
+    gate.click();
+    assert.equal(gate.disabled, true);
+
+    element.hass = {
+        ...hass,
+        states: { ...states, 'cover.gate': { state: 'opening' } },
+    };
+    const renders = t.mock.method(element.buttons, 'applyStateToButton');
+    t.mock.timers.tick(700);
+    assert.equal(renders.mock.callCount(), 1);
+    assert.equal(renders.mock.calls[0].arguments[0], gate);
+    assert.equal(gate.title, 'Gate opening');
+    assert.equal(gate.disabled, true);
+    element.hass = hass;
+    assert.equal(gate.disabled, false);
+});
+
 test('keyboard activation enables audio and buttons keep clear action labels', () => {
     const element = card();
     let audioEnables = 0;
@@ -364,6 +385,9 @@ test('a Home Assistant still image covers a cold connection without reconnecting
 
     image.dispatchEvent(new window.Event('error'));
     assert.equal(image.hidden, true);
+
+    element.hass = hass;
+    assert.equal(image.getAttribute('src'), null);
 });
 
 test('signaling URL preserves HA signing and encodes sources safely', () => {
@@ -437,7 +461,7 @@ test('late microphone permission stops its tracks after navigation', async () =>
     assert.deepEqual(element.localMicrophoneTracks, []);
 });
 
-test('disconnect releases sender, receiver and microphone tracks', () => {
+test('disconnect releases shared sender, receiver and microphone tracks once', () => {
     const element = card();
     let stopped = 0,
         closed = 0;
@@ -446,14 +470,17 @@ test('disconnect releases sender, receiver and microphone tracks', () => {
             stopped++;
         },
     });
+    const microphone = track();
+    const receiver = track();
     element.pc = {
-        getSenders: () => [{ track: track() }],
-        getReceivers: () => [{ track: track() }],
+        getSenders: () => [{ track: track() }, { track: microphone }],
+        getReceivers: () => [{ track: receiver }],
         close() {
             closed++;
         },
     };
-    element.localMicrophoneTracks = [track()];
+    element.localMicrophoneTracks = [microphone];
+    element.pendingVideo = { srcObject: { getTracks: () => [receiver] } };
     element.remove();
     assert.equal(stopped, 3);
     assert.equal(closed, 1);
@@ -782,13 +809,16 @@ test('retired controls cannot dispatch actions after configuration changes', () 
     assert.equal(element.buttons.elements.size, 0);
 });
 
-test('unrelated updates do not search the DOM', (t) => {
+test('unrelated updates do not search the DOM or clear a missing poster', (t) => {
     const element = card();
-    const query = t.mock.method(element.shadowRoot, 'querySelectorAll', () => {
-        throw new Error('Unexpected DOM search');
-    });
+    const image = element.$('.fallback-image');
+    const queryOne = t.mock.method(element.shadowRoot, 'querySelector');
+    const queryAll = t.mock.method(element.shadowRoot, 'querySelectorAll');
+    const removeAttribute = t.mock.method(image, 'removeAttribute');
     element.hass = { ...hass, states: { ...states, 'sensor.other': { state: '1' } } };
-    assert.equal(query.mock.callCount(), 0);
+    assert.equal(queryOne.mock.callCount(), 0);
+    assert.equal(queryAll.mock.callCount(), 0);
+    assert.equal(removeAttribute.mock.callCount(), 0);
 });
 
 test('ICE waits for the remote description before applying candidates', async () => {
