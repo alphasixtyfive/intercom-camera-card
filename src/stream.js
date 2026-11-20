@@ -13,6 +13,7 @@ import { readPreference, writePreference } from './preferences.js';
 const CACHED_FRAME_LIFETIME_MS = 2 * 60 * 1000;
 const MAX_CACHED_FRAMES = 4;
 const cachedFrames = new Map();
+const signedPaths = new WeakMap();
 
 export class IntercomStream extends VideoRTC {
     constructor() {
@@ -25,9 +26,6 @@ export class IntercomStream extends VideoRTC {
         this.peerDisconnectTimeout = 0;
         this.reconnectAttempts = 0;
         this.signing = false;
-        this.signedPath = '';
-        this.signedPathExpiresAt = 0;
-        this.signedPathPromise = null;
         this.talking = false;
         this.streamVariant = 'primary';
         this.localMicrophoneTracks = [];
@@ -35,7 +33,6 @@ export class IntercomStream extends VideoRTC {
         this.posterURL = null;
         this.posterCapturePending = false;
         this.hasPlayedFrame = false;
-        this.pendingVideo = null;
         this.playbackGeneration = -1;
         this.playbackMicrophoneRequested = false;
         this.pendingConnectStatus = undefined;
@@ -198,26 +195,20 @@ export class IntercomStream extends VideoRTC {
     }
 
     getSignedPath() {
-        if (this.signedPath && Date.now() < this.signedPathExpiresAt) {
-            return Promise.resolve(this.signedPath);
-        }
-        if (this.signedPathPromise) return this.signedPathPromise;
+        const key = this.hass.connection ?? this;
+        const cached = signedPaths.get(key);
+        if (cached && Date.now() < cached.expiresAt) return cached.request;
 
+        // Reuse a path within the same HA session for less than its 30-second lifetime.
         const expiresAt = Date.now() + 20_000;
         const request = this.hass
             .callWS({ type: 'auth/sign_path', path: '/api/webrtc/ws' })
-            .then(({ path }) => {
-                if (this.signedPathPromise !== request) return path;
-                // Home Assistant signs paths for 30 seconds by default. Reuse only
-                // a short portion for rapid stream or talk transitions.
-                this.signedPath = path;
-                this.signedPathExpiresAt = expiresAt;
-                return path;
-            })
-            .finally(() => {
-                if (this.signedPathPromise === request) this.signedPathPromise = null;
+            .then(({ path }) => path)
+            .catch((error) => {
+                if (signedPaths.get(key)?.request === request) signedPaths.delete(key);
+                throw error;
             });
-        this.signedPathPromise = request;
+        signedPaths.set(key, { expiresAt, request });
         return request;
     }
 
@@ -301,7 +292,11 @@ export class IntercomStream extends VideoRTC {
             }
         });
         socket.addEventListener('close', () => {
-            if (current() && this.pcState !== WebSocket.OPEN) this.restartPeer();
+            if (!current() || this.pcState === WebSocket.OPEN) return;
+            if (this.wsState === WebSocket.CONNECTING) {
+                signedPaths.delete(this.hass?.connection ?? this);
+            }
+            this.restartPeer();
         });
     }
 
@@ -333,19 +328,26 @@ export class IntercomStream extends VideoRTC {
         this.onwebrtc();
     }
 
-    onpcvideo(video2, microphoneRequested = false) {
-        super.onpcvideo(video2);
-        if (this.pcState !== WebSocket.OPEN) return;
+    startPlayback(stream, microphoneRequested) {
         this.playbackGeneration = this.connectionGeneration;
         this.playbackMicrophoneRequested = microphoneRequested;
         if (this.talking && microphoneRequested && !this.hasLiveMicrophoneTrack()) {
             this.setTalking(false);
             this.showStatus('Microphone unavailable', 3200);
         }
+        this.video.srcObject = stream;
+        this.play();
     }
 
     onVideoPlaying() {
         if (this.playbackGeneration !== this.connectionGeneration || !this.video.srcObject) return;
+        if (this.pcState !== WebSocket.OPEN) {
+            this.pcState = WebSocket.OPEN;
+            this.wsState = WebSocket.CLOSED;
+            const socket = this.ws;
+            this.ws = null;
+            socket?.close();
+        }
         clearTimeout(this.connectionTimeout);
         this.connectionTimeout = 0;
         this.reconnectAttempts = 0;
@@ -413,7 +415,6 @@ export class IntercomStream extends VideoRTC {
     ondisconnect(keepFrame = false) {
         this.connectionGeneration++;
         this.signing = false;
-        this.signedPathPromise = null;
         this.playbackGeneration = -1;
         this.playbackMicrophoneRequested = false;
         clearTimeout(this.peerDisconnectTimeout);
@@ -423,7 +424,7 @@ export class IntercomStream extends VideoRTC {
         clearTimeout(this.statusTimeout);
         this.statusTimeout = 0;
 
-        const { ws, pc, pendingVideo, video } = this;
+        const { ws, pc, video } = this;
         if (keepFrame) {
             if (pc) this.capturePoster();
         } else {
@@ -438,7 +439,6 @@ export class IntercomStream extends VideoRTC {
 
         this.ws = null;
         this.pc = null;
-        this.pendingVideo = null;
         this.wsState = WebSocket.CLOSED;
         this.pcState = WebSocket.CLOSED;
         ws?.close();
@@ -447,13 +447,11 @@ export class IntercomStream extends VideoRTC {
             ...this.localMicrophoneTracks,
             ...(pc?.getSenders().map((sender) => sender.track) ?? []),
             ...(pc?.getReceivers().map((receiver) => receiver.track) ?? []),
-            ...(pendingVideo?.srcObject?.getTracks?.() ?? []),
             ...(video?.srcObject?.getTracks?.() ?? []),
         ]);
         this.localMicrophoneTracks = [];
         this.stopTracks(tracks);
         pc?.close();
-        if (pendingVideo) pendingVideo.srcObject = null;
         if (video) {
             video.removeAttribute('src');
             video.srcObject = null;
@@ -652,24 +650,13 @@ export class IntercomStream extends VideoRTC {
             if (pc.connectionState === 'connected') {
                 clearTimeout(this.peerDisconnectTimeout);
                 this.peerDisconnectTimeout = 0;
-                if (this.pendingVideo || this.pcState === WebSocket.OPEN) return;
+                if (this.playbackGeneration === generation || this.pcState === WebSocket.OPEN)
+                    return;
                 const tracks = pc
                     .getTransceivers()
                     .filter((item) => ['recvonly', 'sendrecv'].includes(item.currentDirection))
                     .map((item) => item.receiver.track);
-                const preview = document.createElement('video');
-                this.pendingVideo = preview;
-                preview.addEventListener(
-                    'loadeddata',
-                    () => {
-                        if (current()) this.onpcvideo(preview, microphoneRequested);
-                        else this.stopStreamTracks(preview.srcObject);
-                        preview.srcObject = null;
-                        if (this.pendingVideo === preview) this.pendingVideo = null;
-                    },
-                    { once: true },
-                );
-                preview.srcObject = new MediaStream(tracks);
+                if (tracks.length) this.startPlayback(new MediaStream(tracks), microphoneRequested);
             } else if (pc.connectionState === 'disconnected') {
                 if (this.peerDisconnectTimeout) return;
                 this.peerDisconnectTimeout = setTimeout(() => {

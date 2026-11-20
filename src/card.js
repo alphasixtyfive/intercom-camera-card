@@ -40,13 +40,15 @@ export class IntercomCameraCard extends IntercomStream {
 
     set hass(hass) {
         const previous = this._hass;
+        const connectionChanged = previous && previous.connection !== hass?.connection;
         this._hass = hass;
+        if (connectionChanged) this.disconnectImmediately();
         if (this.fallbackImage) this.updateFallbackImage();
         if (this.isConnected) this.buttons.updateStatefulButtons(previous);
-        if (!previous && this.config && !this.isConnected) {
-            this.getSignedPath().catch(() => {});
+        if (hass && (!previous || connectionChanged)) {
+            if (this.config && !this.isConnected) this.getSignedPath().catch(() => {});
+            this.onconnect();
         }
-        if (!previous) this.onconnect();
     }
 
     get hass() {

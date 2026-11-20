@@ -311,44 +311,77 @@ test('signed connection requests coalesce and stale replies cannot connect', asy
     await Promise.resolve();
     assert.equal(element.ws, null);
     assert.equal(element.signing, false);
-    assert.equal(element.signedPath, '');
 });
 
-test('rapid stream changes reuse a valid signed path', async () => {
-    const element = document.createElement('intercom-camera-card');
-    element.setConfig(config);
+test('a signed path is shared by cards on the same HA connection until it expires', async (t) => {
+    let now = Date.now();
+    t.mock.method(Date, 'now', () => now);
     let requests = 0;
+    function detachedCard(connection) {
+        const element = document.createElement('intercom-camera-card');
+        element.setConfig(config);
+        element.hass = {
+            ...hass,
+            connection,
+            callWS: async () => ({ path: `/api/webrtc/ws?authSig=${++requests}` }),
+        };
+        return element;
+    }
+    const connection = {};
+    const element = detachedCard(connection);
+    const other = detachedCard(connection);
+    const first = await element.getSignedPath();
+    assert.equal(await other.getSignedPath(), first);
+    assert.equal(requests, 1);
+    assert.notEqual(await detachedCard({}).getSignedPath(), first);
+    assert.equal(requests, 2);
+    now += 20_000;
+    assert.notEqual(await element.getSignedPath(), first);
+    assert.equal(requests, 3);
+});
+
+test('switching HA connections discards the previous session’s pending signature', async () => {
+    let signPrevious;
+    const element = document.createElement('intercom-camera-card');
+    const sockets = [];
+    element.openSocket = () => sockets.push(new URL(element.wsURL).searchParams.get('authSig'));
+    element.setConfig(config);
     element.hass = {
         ...hass,
-        callWS: async () => {
-            requests++;
-            return { path: `/api/webrtc/ws?authSig=${requests}` };
-        },
+        connection: {},
+        callWS: () => new Promise((resolve) => (signPrevious = resolve)),
+    };
+    document.body.append(element);
+    element.hass = {
+        ...hass,
+        connection: {},
+        callWS: async () => ({ path: '/api/webrtc/ws?authSig=current' }),
     };
 
-    const first = await element.getSignedPath();
-    assert.equal(await element.getSignedPath(), first);
-    assert.equal(requests, 1);
-
-    element.signedPathExpiresAt = Date.now() - 1;
-    assert.notEqual(await element.getSignedPath(), first);
-    assert.equal(requests, 2);
+    signPrevious({ path: '/api/webrtc/ws?authSig=previous' });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(sockets, ['current']);
 });
 
-test('loading stays centered until the visible video plays', () => {
+test('the visible video gets the stream directly and keeps loading until playback', () => {
     const element = card();
-    const incoming = document.createElement('video');
-    incoming.srcObject = new window.MediaStream();
+    const stream = new window.MediaStream();
+    let socketClosed = false;
+    element.ws = { close: () => (socketClosed = true) };
     element.pc = { getSenders: () => [], getReceivers: () => [], close() {} };
     const timeout = element.connectionTimeout;
     assert.ok(timeout);
     assert.equal(element.$('.status').classList.contains('centered'), true);
 
-    element.onpcvideo(incoming);
+    element.startPlayback(stream, false);
+    assert.equal(element.video.srcObject, stream);
+    assert.equal(socketClosed, false);
     assert.equal(element.connectionTimeout, timeout);
     assert.equal(element.$('.status').textContent, 'Connecting video');
 
     element.video.dispatchEvent(new window.Event('playing'));
+    assert.equal(element.pcState, WebSocket.OPEN);
+    assert.equal(socketClosed, true);
     assert.equal(element.connectionTimeout, 0);
     assert.equal(element.$('.status').textContent, '');
     assert.equal(element.$('.status').classList.contains('centered'), false);
@@ -480,7 +513,9 @@ test('disconnect releases shared sender, receiver and microphone tracks once', (
         },
     };
     element.localMicrophoneTracks = [microphone];
-    element.pendingVideo = { srcObject: { getTracks: () => [receiver] } };
+    const stream = new window.MediaStream();
+    stream.getTracks = () => [receiver];
+    element.video.srcObject = stream;
     element.remove();
     assert.equal(stopped, 3);
     assert.equal(closed, 1);
